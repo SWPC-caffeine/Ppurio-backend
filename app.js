@@ -31,8 +31,11 @@ const upload = multer({ storage: storage });
 // PDF에서 텍스트를 추출하는 함수
 const extractTextFromPDF = (filePath) => {
   return new Promise((resolve, reject) => {
+    const startTime = Date.now();  // 시작 시간 기록
     const dataBuffer = fs.readFileSync(filePath);
     pdf(dataBuffer).then(data => {
+      const endTime = Date.now();  // 종료 시간 기록
+      console.log(`PDF 텍스트 추출 시간: ${endTime - startTime}ms`); 
       resolve(data.text);  // 추출된 텍스트 반환
     }).catch(err => {
       reject(err);  // 오류 발생 시 reject
@@ -42,10 +45,13 @@ const extractTextFromPDF = (filePath) => {
 
 // OpenAI를 사용하여 텍스트를 요약하는 함수
 const summarizeText = async (text, userText) => {
+  const startTime = Date.now();  // 시작 시간 기록
   const response = await openai.chat.completions.create({
     model: 'gpt-4',
     messages: [{ role: 'user', content: `사용자 입력을 참고해서 생성해: ${userText} 이 다음 내용을 요약해줘\n\n${text}\n` }],
   });
+  const endTime = Date.now();  // 종료 시간 기록
+  console.log(`텍스트 요약 시간: ${endTime - startTime}ms`);  // 실행 시간 출력
   return response.choices[0].message.content; // 요약된 텍스트 반환
 };
 
@@ -59,7 +65,11 @@ app.post('/upload', upload.single('file'), async (req, res) => {
     const extractedText = await extractTextFromPDF(filePath);
     const summarizedText = await summarizeText(extractedText, userText); // 텍스트 요약 (userText 포함)
     console.log('요약된 내용:' + summarizedText);
-    res.send(`파일 업로드 성공: ${req.file.filename}\n요약된 내용:\n${summarizedText}`);
+    res.json({ 
+      success: true, 
+      filename: req.file.filename, 
+      summary: summarizedText 
+    });
   } catch (err) {
     res.status(400).send('파일 업로드 실패: ' + err.message);
   }
