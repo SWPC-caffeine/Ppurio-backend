@@ -8,8 +8,18 @@ const pdf = require('pdf-parse');  // pdf-parse 모듈
 const OpenAI = require('openai'); // OpenAI 모듈
 const app = express();
 const port = 3030;
+const sharp = require("sharp");
+const { createCanvas, loadImage, registerFont } = require("canvas"); // canvas 모듈
 
 app.use(cors());  // CORS 미들웨어를 사용하여 모든 도메인에 요청 허용
+
+// 폰트 등록 (CustomSantteutDotum으로 이름 지정)
+const fontDirectory = path.join(
+  __dirname,
+  "fonts",
+  "HanSantteutDotum-Regular.ttf"
+);
+registerFont(fontDirectory, { family: "CustomSantteutDotum" });
 
 // OpenAI API 설정
 const openai = new OpenAI({
@@ -48,11 +58,85 @@ const summarizeText = async (text, userText) => {
   const startTime = Date.now();  // 시작 시간 기록
   const response = await openai.chat.completions.create({
     model: 'gpt-4',
-    messages: [{ role: 'user', content: `학생들이 요약된 텍스트를 보고 공부할 수 있게 요약해줘: ${userText} 이 다음 내용을 요약해줘\n\n${text}\n` }],
+    messages: [{ role: 'user', content: `: ${userText} 이 다음 내용을 요약해줘\n\n${text}\n` }],
   });
   const endTime = Date.now();  // 종료 시간 기록
   console.log(`텍스트 요약 시간: ${endTime - startTime}ms`);  // 실행 시간 출력
   return response.choices[0].message.content; // 요약된 텍스트 반환
+};
+
+const generateImageWithText = async (
+  text,
+  fontName = "CustomSantteutDotum"
+) => {
+  const backgroundImagePath = path.join(__dirname, "background.png");
+
+  try {
+    const image = await loadImage(backgroundImagePath);
+    const canvas = createCanvas(image.width, image.height);
+    const ctx = canvas.getContext("2d");
+
+    ctx.drawImage(image, 0, 0, image.width, image.height);
+
+    // 텍스트 크기 및 스타일 설정
+    const fontSize = 12; // 글씨 크기를 좀 더 줄임
+    ctx.font = `${fontSize}px "${fontName}"`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    
+    // 윤곽선 스타일 설정
+    ctx.lineWidth = 3; // 윤곽선 두께
+    ctx.strokeStyle = "black"; // 윤곽선 색상
+
+    // 그림자 설정
+    ctx.shadowColor = "rgba(0, 0, 0, 0.3)";
+    ctx.shadowBlur = 4;
+    ctx.shadowOffsetX = 2;
+    ctx.shadowOffsetY = 2;
+
+    const maxWidth = canvas.width * 0.5;
+    const lineHeight = fontSize * 1.2;
+    const textX = canvas.width / 2;
+    const startY = canvas.height / 4;
+
+    const wrapText = (ctx, text, x, y, maxWidth, lineHeight) => {
+      const lines = text.split("\n");
+      let yPos = y;
+      for (let i = 0; i < lines.length; i++) {
+        const words = lines[i].split(" ");
+        let line = "";
+        for (let n = 0; n < words.length; n++) {
+          const testLine = line + words[n] + " ";
+          const testWidth = ctx.measureText(testLine).width;
+          if (testWidth > maxWidth && line !== "") {
+            ctx.fillStyle = "white";
+            ctx.strokeText(line, x, yPos); // 윤곽선
+            ctx.fillText(line, x, yPos);
+            line = words[n] + " ";
+            yPos += lineHeight;
+          } else {
+            line = testLine;
+          }
+        }
+        ctx.fillStyle = "white";
+        ctx.strokeText(line, x, yPos); // 윤곽선
+        ctx.fillText(line, x, yPos);
+        yPos += lineHeight;
+      }
+    };
+
+    wrapText(ctx, text, textX, startY, maxWidth, lineHeight);
+
+    const outputPath = path.join(__dirname, "output.png");
+    const buffer = canvas.toBuffer("image/png");
+    fs.writeFileSync(outputPath, buffer);
+    console.log(`이미지 저장 완료: ${outputPath}`);
+
+    return outputPath;
+  } catch (error) {
+    console.error("이미지 생성 오류:", error);
+    throw new Error("이미지 생성 실패: " + error.message);
+  }
 };
 
 // 파일 업로드를 처리하는 라우트
@@ -65,10 +149,14 @@ app.post('/upload', upload.single('file'), async (req, res) => {
     const extractedText = await extractTextFromPDF(filePath);
     const summarizedText = await summarizeText(extractedText, userText); // 텍스트 요약 (userText 포함)
     console.log('요약된 내용:' + summarizedText);
+
+    const outputImagePath = await generateImageWithText(summarizedText);
+
     res.json({ 
       success: true, 
       filename: req.file.filename, 
-      summary: summarizedText 
+      summary: summarizedText, 
+      imagePath: outputImagePath, 
     });
   } catch (err) {
     res.status(400).send('파일 업로드 실패: ' + err.message);
