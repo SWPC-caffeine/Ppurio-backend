@@ -78,30 +78,17 @@ const generateImageWithText = async (
 
     ctx.drawImage(image, 0, 0, image.width, image.height);
 
-    const fontSize = 12;
+    const fontSize = 15;
+    const padding = 10; // 텍스트와 배경 박스 간격
     ctx.font = `${fontSize}px "${fontName}"`;
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
 
-    // 가독성을 위한 그림자 및 윤곽선 설정
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = "black";
-    ctx.shadowColor = "rgba(0, 0, 0, 0.3)";
-    ctx.shadowBlur = 4;
-    ctx.shadowOffsetX = 2;
-    ctx.shadowOffsetY = 2;
-
     const maxWidth = canvas.width * 0.5;
-    const lineHeight = fontSize * 1.4; // 조금 넓은 라인 간격 설정
+    const lineHeight = fontSize * 1.4; // 줄 간격 조정
     const textX = canvas.width / 2;
     const startY = canvas.height / 4;
 
-    // 텍스트 배경 박스 색상 및 크기 설정
-    const padding = 10;
-    const backgroundAlpha = 0.6; // 반투명도 설정
-    const backgroundColor = `rgba(0, 0, 0, ${backgroundAlpha})`;
-
-    // 텍스트 줄 바꿈 및 배경 박스 추가 함수
     const wrapTextWithBackground = (ctx, text, x, y, maxWidth, lineHeight) => {
       const lines = text.split("\n");
       let yPos = y;
@@ -109,20 +96,24 @@ const generateImageWithText = async (
       for (let i = 0; i < lines.length; i++) {
         const words = lines[i].split(" ");
         let line = "";
+        
         for (let n = 0; n < words.length; n++) {
           const testLine = line + words[n] + " ";
           const testWidth = ctx.measureText(testLine).width;
+
           if (testWidth > maxWidth && line !== "") {
             const textWidth = ctx.measureText(line).width;
-            const textHeight = fontSize;
-            
-            // 배경 박스 그리기
-            ctx.fillStyle = backgroundColor;
-            ctx.fillRect(x - textWidth / 2 - padding, yPos - padding, textWidth + padding * 2, textHeight + padding * 2);
-            
-            // 텍스트 그리기
+            const boxX = x - textWidth / 2 - padding;
+            const boxY = yPos - padding;
+            const boxWidth = textWidth + padding * 2;
+            const boxHeight = fontSize + padding * 2;
+
+            // 배경 박스 색상 설정 (회색)
+            ctx.fillStyle = "rgba(50, 50, 50, 0.8)";
+            ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+
+            // 텍스트 그리기 (흰색)
             ctx.fillStyle = "white";
-            ctx.strokeText(line, x, yPos);
             ctx.fillText(line, x, yPos);
             line = words[n] + " ";
             yPos += lineHeight;
@@ -130,15 +121,19 @@ const generateImageWithText = async (
             line = testLine;
           }
         }
+
         const textWidth = ctx.measureText(line).width;
-        const textHeight = fontSize;
+        const boxX = x - textWidth / 2 - padding;
+        const boxY = yPos - padding;
+        const boxWidth = textWidth + padding * 2;
+        const boxHeight = fontSize + padding * 2;
 
-        // 마지막 줄 배경 박스 및 텍스트 그리기
-        ctx.fillStyle = backgroundColor;
-        ctx.fillRect(x - textWidth / 2 - padding, yPos - padding, textWidth + padding * 2, textHeight + padding * 2);
+        // 배경 박스 색상 설정 (회색)
+        ctx.fillStyle = "rgba(50, 50, 50, 0.8)";
+        ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
 
+        // 텍스트 그리기 (흰색)
         ctx.fillStyle = "white";
-        ctx.strokeText(line, x, yPos);
         ctx.fillText(line, x, yPos);
         yPos += lineHeight;
       }
