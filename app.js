@@ -58,7 +58,7 @@ const summarizeText = async (text, userText) => {
   const startTime = Date.now();  // 시작 시간 기록
   const response = await openai.chat.completions.create({
     model: 'gpt-4',
-    messages: [{ role: 'user', content: ': ${userText} 이 다음 내용을 요약해줘\n\n${text}\n` }],
+    messages: [{ role: 'user', content: `: ${userText} 이 다음 내용을 요약해줘\n\n${text}\n` }],
   });
   const endTime = Date.now();  // 종료 시간 기록
   console.log(`텍스트 요약 시간: ${endTime - startTime}ms`);  // 실행 시간 출력
