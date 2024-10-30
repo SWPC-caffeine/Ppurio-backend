@@ -58,7 +58,7 @@ const summarizeText = async (text, userText) => {
   const startTime = Date.now();  // 시작 시간 기록
   const response = await openai.chat.completions.create({
     model: 'gpt-4',
-    messages: [{ role: 'user', content: `: ${userText} 이 다음 내용을 요약해줘\n\n${text}\n` }],
+    messages: [{ role: 'user', content: ': ${userText} 이 다음 내용을 요약해줘\n\n${text}\n` }],
   });
   const endTime = Date.now();  // 종료 시간 기록
   console.log(`텍스트 요약 시간: ${endTime - startTime}ms`);  // 실행 시간 출력
@@ -78,30 +78,34 @@ const generateImageWithText = async (
 
     ctx.drawImage(image, 0, 0, image.width, image.height);
 
-    // 텍스트 크기 및 스타일 설정
-    const fontSize = 12; // 글씨 크기를 좀 더 줄임
+    const fontSize = 12;
     ctx.font = `${fontSize}px "${fontName}"`;
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
-    
-    // 윤곽선 스타일 설정
-    ctx.lineWidth = 3; // 윤곽선 두께
-    ctx.strokeStyle = "black"; // 윤곽선 색상
 
-    // 그림자 설정
+    // 가독성을 위한 그림자 및 윤곽선 설정
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "black";
     ctx.shadowColor = "rgba(0, 0, 0, 0.3)";
     ctx.shadowBlur = 4;
     ctx.shadowOffsetX = 2;
     ctx.shadowOffsetY = 2;
 
     const maxWidth = canvas.width * 0.5;
-    const lineHeight = fontSize * 1.2;
+    const lineHeight = fontSize * 1.4; // 조금 넓은 라인 간격 설정
     const textX = canvas.width / 2;
     const startY = canvas.height / 4;
 
-    const wrapText = (ctx, text, x, y, maxWidth, lineHeight) => {
+    // 텍스트 배경 박스 색상 및 크기 설정
+    const padding = 10;
+    const backgroundAlpha = 0.6; // 반투명도 설정
+    const backgroundColor = `rgba(0, 0, 0, ${backgroundAlpha})`;
+
+    // 텍스트 줄 바꿈 및 배경 박스 추가 함수
+    const wrapTextWithBackground = (ctx, text, x, y, maxWidth, lineHeight) => {
       const lines = text.split("\n");
       let yPos = y;
+
       for (let i = 0; i < lines.length; i++) {
         const words = lines[i].split(" ");
         let line = "";
@@ -109,8 +113,16 @@ const generateImageWithText = async (
           const testLine = line + words[n] + " ";
           const testWidth = ctx.measureText(testLine).width;
           if (testWidth > maxWidth && line !== "") {
+            const textWidth = ctx.measureText(line).width;
+            const textHeight = fontSize;
+            
+            // 배경 박스 그리기
+            ctx.fillStyle = backgroundColor;
+            ctx.fillRect(x - textWidth / 2 - padding, yPos - padding, textWidth + padding * 2, textHeight + padding * 2);
+            
+            // 텍스트 그리기
             ctx.fillStyle = "white";
-            ctx.strokeText(line, x, yPos); // 윤곽선
+            ctx.strokeText(line, x, yPos);
             ctx.fillText(line, x, yPos);
             line = words[n] + " ";
             yPos += lineHeight;
@@ -118,14 +130,21 @@ const generateImageWithText = async (
             line = testLine;
           }
         }
+        const textWidth = ctx.measureText(line).width;
+        const textHeight = fontSize;
+
+        // 마지막 줄 배경 박스 및 텍스트 그리기
+        ctx.fillStyle = backgroundColor;
+        ctx.fillRect(x - textWidth / 2 - padding, yPos - padding, textWidth + padding * 2, textHeight + padding * 2);
+
         ctx.fillStyle = "white";
-        ctx.strokeText(line, x, yPos); // 윤곽선
+        ctx.strokeText(line, x, yPos);
         ctx.fillText(line, x, yPos);
         yPos += lineHeight;
       }
     };
 
-    wrapText(ctx, text, textX, startY, maxWidth, lineHeight);
+    wrapTextWithBackground(ctx, text, textX, startY, maxWidth, lineHeight);
 
     const outputPath = path.join(__dirname, "output.png");
     const buffer = canvas.toBuffer("image/png");
