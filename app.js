@@ -23,7 +23,7 @@ registerFont(fontDirectory, { family: "CustomSantteutDotum" });
 
 // OpenAI API 설정
 const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,  // 환경 변수에서 API 키 가져오기
+  apiKey: process.env.OPENAI_API_KEY,  // 환경 변수에서 API 키 가져오기
 });
 
 // Multer 설정: 업로드된 파일을 'uploads' 폴더에 저장
@@ -45,7 +45,7 @@ const extractTextFromPDF = (filePath) => {
     const dataBuffer = fs.readFileSync(filePath);
     pdf(dataBuffer).then(data => {
       const endTime = Date.now();  // 종료 시간 기록
-      console.log(`PDF 텍스트 추출 시간: ${endTime - startTime}ms`); 
+      console.log(`PDF 텍스트 추출 시간: ${endTime - startTime}ms`);
       resolve(data.text);  // 추출된 텍스트 반환
     }).catch(err => {
       reject(err);  // 오류 발생 시 reject
@@ -58,7 +58,7 @@ const summarizeText = async (text, userText) => {
   const startTime = Date.now();  // 시작 시간 기록
   const response = await openai.chat.completions.create({
     model: 'gpt-4',
-    messages: [{ role: 'user', content: `: ${userText} 이 다음 내용을 요약해줘\n\n${text}\n` }],
+    messages: [{ role: 'user', content: `: ${userText} 포스터 형식으로 머리글 기호로 짧게 작성해\n\n${text}\n` }],
   });
   const endTime = Date.now();  // 종료 시간 기록
   console.log(`텍스트 요약 시간: ${endTime - startTime}ms`);  // 실행 시간 출력
@@ -69,7 +69,7 @@ const generateImageWithText = async (
   text,
   fontName = "CustomSantteutDotum"
 ) => {
-  const backgroundImagePath = path.join(__dirname, "background.png");
+  const backgroundImagePath = path.join(__dirname, "images/background1-2.png");
 
   try {
     const image = await loadImage(backgroundImagePath);
@@ -78,41 +78,48 @@ const generateImageWithText = async (
 
     ctx.drawImage(image, 0, 0, image.width, image.height);
 
-    const fontSize = 15;
-    const padding = 10; // 텍스트와 배경 박스 간격
-    ctx.font = `${fontSize}px "${fontName}"`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "top";
+    let fontSize = 30; // 텍스트 크기를 더 크게 설정
+    const maxWidth = canvas.width * 0.4; // 텍스트 영역을 화면의 40%로 설정
+    const lineHeight = fontSize * 1.3; // 줄 간격을 약간 줄임
 
-    const maxWidth = canvas.width * 0.5;
-    const lineHeight = fontSize * 1.4; // 줄 간격 조정
-    const textX = canvas.width / 2;
-    const startY = canvas.height / 4;
+    // 폰트 설정
+    ctx.font = `bold ${fontSize}px "${fontName}"`; // 볼드체 설정
+    ctx.textAlign = "left"; // 왼쪽 정렬
+    ctx.textBaseline = "top"; // 텍스트 위쪽을 기준으로 정렬
 
-    const wrapTextWithBackground = (ctx, text, x, y, maxWidth, lineHeight) => {
+    // 텍스트가 길면 폰트 크기 조정
+    const adjustFontSizeToFit = (text) => {
+      while (ctx.measureText(text).width > maxWidth) {
+        fontSize -= 1;
+        ctx.font = `bold ${fontSize}px "${fontName}"`;
+      }
+    };
+    adjustFontSizeToFit(text);
+
+    const wrapText = (ctx, text, x, y, maxWidth, lineHeight) => {
       const lines = text.split("\n");
       let yPos = y;
 
       for (let i = 0; i < lines.length; i++) {
         const words = lines[i].split(" ");
         let line = "";
-        
+
         for (let n = 0; n < words.length; n++) {
           const testLine = line + words[n] + " ";
           const testWidth = ctx.measureText(testLine).width;
 
           if (testWidth > maxWidth && line !== "") {
-            const textWidth = ctx.measureText(line).width;
-            const boxX = x - textWidth / 2 - padding;
-            const boxY = yPos - padding;
-            const boxWidth = textWidth + padding * 2;
-            const boxHeight = fontSize + padding * 2;
+            // 배경 박스 크기 설정 및 그리기
+            const padding = 3; // padding을 줄여서 배경 박스 크기를 줄임
+            ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+            ctx.fillRect(
+              x - padding,
+              yPos - padding,
+              ctx.measureText(line).width + padding * 2,
+              lineHeight + padding
+            );
 
-            // 배경 박스 색상 설정 (회색)
-            ctx.fillStyle = "rgba(50, 50, 50, 0.8)";
-            ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
-
-            // 텍스트 그리기 (흰색)
+            // 텍스트 그리기
             ctx.fillStyle = "white";
             ctx.fillText(line, x, yPos);
             line = words[n] + " ";
@@ -122,24 +129,23 @@ const generateImageWithText = async (
           }
         }
 
-        const textWidth = ctx.measureText(line).width;
-        const boxX = x - textWidth / 2 - padding;
-        const boxY = yPos - padding;
-        const boxWidth = textWidth + padding * 2;
-        const boxHeight = fontSize + padding * 2;
-
-        // 배경 박스 색상 설정 (회색)
-        ctx.fillStyle = "rgba(50, 50, 50, 0.8)";
-        ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
-
-        // 텍스트 그리기 (흰색)
+        // 마지막 줄 배경과 텍스트 그리기
+        ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+        ctx.fillRect(
+          x - 3,
+          yPos - 3,
+          ctx.measureText(line).width + 6,
+          lineHeight + 6
+        );
         ctx.fillStyle = "white";
         ctx.fillText(line, x, yPos);
         yPos += lineHeight;
       }
     };
 
-    wrapTextWithBackground(ctx, text, textX, startY, maxWidth, lineHeight);
+    const textX = canvas.width * 0.1; // 화면 왼쪽에 텍스트 배치
+    const textY = canvas.height * 0.1; // 화면의 상단에 텍스트 시작 위치 조정
+    wrapText(ctx, text, textX, textY, maxWidth, lineHeight);
 
     const outputPath = path.join(__dirname, "output.png");
     const buffer = canvas.toBuffer("image/png");
@@ -153,6 +159,18 @@ const generateImageWithText = async (
   }
 };
 
+// 홍보 텍스트 작성하는 함수
+const createPromotionText = async (summarizedText) => {
+  const startTime = Date.now();  // 시작 시간 기록
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4',
+    messages: [{ role: 'user', content: `다음 텍스트를 홍보 메시지로 작성해줘.\n\n${summarizedText}\n` }],
+  });
+  const endTime = Date.now();  // 종료 시간 기록
+  console.log(`\n홍보 텍스트 생성 시간: ${endTime - startTime}ms`);  // 실행 시간 출력
+  return response.choices[0].message.content; // 홍보 텍스트 반환
+};
+
 // 파일 업로드를 처리하는 라우트
 app.post('/upload', upload.single('file'), async (req, res) => {
   try {
@@ -163,14 +181,17 @@ app.post('/upload', upload.single('file'), async (req, res) => {
     const extractedText = await extractTextFromPDF(filePath);
     const summarizedText = await summarizeText(extractedText, userText); // 텍스트 요약 (userText 포함)
     console.log('요약된 내용:' + summarizedText);
+    const promotionText = await createPromotionText(summarizedText); // 홍보 텍스트 생성
+    console.log('홍보 텍스트: ' + promotionText);
 
     const outputImagePath = await generateImageWithText(summarizedText);
 
-    res.json({ 
-      success: true, 
-      filename: req.file.filename, 
-      summary: summarizedText, 
-      imagePath: outputImagePath, 
+    res.json({
+      success: true,
+      filename: req.file.filename,
+      summary: summarizedText,
+      promotionText: promotionText,
+      imagePath: outputImagePath,
     });
   } catch (err) {
     res.status(400).send('파일 업로드 실패: ' + err.message);
