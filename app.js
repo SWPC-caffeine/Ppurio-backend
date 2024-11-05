@@ -1,4 +1,5 @@
 require('dotenv').config(); // dotenv 모듈 초기화
+// const axios = require('axios');
 const express = require('express');
 const multer = require('multer');
 const cors = require('cors');
@@ -12,6 +13,7 @@ const sharp = require("sharp");
 const { createCanvas, loadImage, registerFont } = require("canvas"); // canvas 모듈
 
 app.use(cors());  // CORS 미들웨어를 사용하여 모든 도메인에 요청 허용
+app.use(express.json());  // JSON 파싱을 위한 미들웨어 설정
 
 // 폰트 등록 (CustomSantteutDotum으로 이름 지정)
 const fontDirectory = path.join(
@@ -196,6 +198,45 @@ app.post('/upload', upload.single('file'), async (req, res) => {
     });
   } catch (err) {
     res.status(400).send('파일 업로드 실패: ' + err.message);
+  }
+});
+
+// OpenAI 인스턴스 방식으로 이미지 프롬프트 생성 및 이미지 요청
+app.post('/generate-image', async (req, res) => {
+  const { description } = req.body;
+
+  try {
+      const gptResponse = await openai.chat.completions.create({
+          model: "gpt-4",
+          messages: [
+              {
+                  role: "system",
+                  content: `You are an assistant that generates image prompts for a promotional poster background. 
+                            Ensure no text or human figures are in the image. Focus on clean, abstract shapes and 
+                            symbolic elements that visually represent the topic. Limit the prompt to 1000 characters.`
+              },
+              {
+                  role: "user",
+                  content: `Generate a creative and visually appealing image prompt for a company’s promotional poster 
+                            background based on the following summary, under 1000 characters: ${description}`
+              }
+          ],
+          temperature: 0.5
+      });
+
+      const imagePrompt = gptResponse.choices[0].message.content.trim();
+
+      const dalleResponse = await openai.images.generate({
+          prompt: imagePrompt,
+          n: 4,
+          size: "1024x1024"
+      });
+
+      const imageUrls = dalleResponse.data.map(item => item.url);
+      res.json({ imageUrls });
+  } catch (error) {
+      console.error('Error generating image:', error.response ? error.response.data : error.message);
+      res.status(500).json({ error: '이미지 생성 중 오류가 발생했습니다.' });
   }
 });
 
