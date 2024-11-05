@@ -58,7 +58,7 @@ const summarizeText = async (text, userText) => {
   const startTime = Date.now();  // 시작 시간 기록
   const response = await openai.chat.completions.create({
     model: 'gpt-4',
-    messages: [{ role: 'user', content: `: ${userText} 포스터 형식으로 머리글 기호로 짧게 작성해\n\n${text}\n` }],
+    messages: [{ role: 'user', content: `: ${userText} 머리글 기호로 짧게 작성해. 번호 매기지 말고 요약 내용만 바로 출력해\n\n${text}\n` }],
   });
   const endTime = Date.now();  // 종료 시간 기록
   console.log(`텍스트 요약 시간: ${endTime - startTime}ms`);  // 실행 시간 출력
@@ -69,90 +69,91 @@ const generateImageWithText = async (
   text,
   fontName = "CustomSantteutDotum"
 ) => {
-  const backgroundImagePath = path.join(__dirname, "images/background1-2.png");
+  const images = [
+    "images/1-5/background2-5.png",
+    "images/1-5/background2-6.png",
+    "images/2-5/background1-1.png",
+    "images/2-5/background1-7.png",
+  ];
 
   try {
-    const image = await loadImage(backgroundImagePath);
-    const canvas = createCanvas(image.width, image.height);
-    const ctx = canvas.getContext("2d");
+    for (let i = 0; i < images.length; i++) {
+      const imagePath = path.join(__dirname, images[i]);
+      const image = await loadImage(imagePath);
+      const canvas = createCanvas(image.width, image.height);
+      const ctx = canvas.getContext("2d");
 
-    ctx.drawImage(image, 0, 0, image.width, image.height);
+      ctx.drawImage(image, 0, 0, image.width, image.height);
 
-    let fontSize = 30; // 텍스트 크기를 더 크게 설정
-    const maxWidth = canvas.width * 0.4; // 텍스트 영역을 화면의 40%로 설정
-    const lineHeight = fontSize * 1.3; // 줄 간격을 약간 줄임
+      let fontSize = canvas.height * 0.15;
+      const minFontSize = 15; // 최소 폰트 크기 설정
+      const maxWidth = canvas.width * 0.8;
+      const lineHeightMultiplier = 2.2;
 
-    // 폰트 설정
-    ctx.font = `bold ${fontSize}px "${fontName}"`; // 볼드체 설정
-    ctx.textAlign = "left"; // 왼쪽 정렬
-    ctx.textBaseline = "top"; // 텍스트 위쪽을 기준으로 정렬
+      ctx.font = `bold ${fontSize}px "${fontName}"`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top"; // 텍스트가 기준선 위쪽으로 정렬되도록 설정
 
-    // 텍스트가 길면 폰트 크기 조정
-    const adjustFontSizeToFit = (text) => {
-      while (ctx.measureText(text).width > maxWidth) {
-        fontSize -= 1;
-        ctx.font = `bold ${fontSize}px "${fontName}"`;
-      }
-    };
-    adjustFontSizeToFit(text);
+      const adjustFontSizeToFit = (text) => {
+        while (ctx.measureText(text).width > maxWidth && fontSize > minFontSize) {
+          fontSize -= 1;
+          ctx.font = `bold ${fontSize}px "${fontName}"`;
+        }
+      };
+      adjustFontSizeToFit(text);
 
-    const wrapText = (ctx, text, x, y, maxWidth, lineHeight) => {
-      const lines = text.split("\n");
-      let yPos = y;
-
-      for (let i = 0; i < lines.length; i++) {
-        const words = lines[i].split(" ");
+      const wrapTextWithFixedBackground = (ctx, text, x, y, maxWidth, fontSize) => {
+        const lineHeight = fontSize * lineHeightMultiplier;
+        const lines = [];
         let line = "";
-
-        for (let n = 0; n < words.length; n++) {
-          const testLine = line + words[n] + " ";
+        const words = text.split(" ");
+      
+        words.forEach((word) => {
+          const testLine = line + word + " ";
           const testWidth = ctx.measureText(testLine).width;
-
+      
           if (testWidth > maxWidth && line !== "") {
-            // 배경 박스 크기 설정 및 그리기
-            const padding = 3; // padding을 줄여서 배경 박스 크기를 줄임
-            ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
-            ctx.fillRect(
-              x - padding,
-              yPos - padding,
-              ctx.measureText(line).width + padding * 2,
-              lineHeight + padding
-            );
-
-            // 텍스트 그리기
-            ctx.fillStyle = "white";
-            ctx.fillText(line, x, yPos);
-            line = words[n] + " ";
-            yPos += lineHeight;
+            lines.push(line.trim());
+            line = word + " ";
           } else {
             line = testLine;
           }
-        }
+        });
+        lines.push(line.trim());
+      
+        // 중앙보다 위쪽에 텍스트를 위치시키기 위해 y 값 조정
+        y -= (lines.length * lineHeight) / 2;
+      
+        // 고정된 배경 박스를 그리기 위한 설정
+        const backgroundHeight = canvas.height * 0.5; // 전체 높이의 50%를 배경으로 설정
+        const backgroundWidth = canvas.width * 0.8; // 전체 너비의 80%를 배경으로 설정
+        const backgroundX = (canvas.width - backgroundWidth) / 2; // 배경을 중앙에 위치시키기 위한 X 좌표
+        const backgroundY = (canvas.height - backgroundHeight) / 2; // 배경을 중앙에 위치시키기 위한 Y 좌표
+      
+        // 불투명한 검정색 배경 그리기
+        ctx.fillStyle = "rgba(0, 0, 0, 0.7)"; // 불투명한 검정색 배경
+        ctx.fillRect(backgroundX, backgroundY, backgroundWidth, backgroundHeight);
+      
+        // 텍스트 Y 위치 조정 (배경 중앙에 오도록)
+        y = backgroundY + (backgroundHeight - lines.length * lineHeight) * 0.1;
+      
+        // 각 줄의 텍스트 그리기
+        lines.forEach((line) => {
+          ctx.fillStyle = "white";
+          ctx.fillText(line, x, y);
+          y += lineHeight;
+        });
+      };
 
-        // 마지막 줄 배경과 텍스트 그리기
-        ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
-        ctx.fillRect(
-          x - 3,
-          yPos - 3,
-          ctx.measureText(line).width + 6,
-          lineHeight + 6
-        );
-        ctx.fillStyle = "white";
-        ctx.fillText(line, x, yPos);
-        yPos += lineHeight;
-      }
-    };
+      const textX = canvas.width / 2;
+      const textY = canvas.height * 0.25; // 텍스트를 화면 상단에 더 가깝게 배치
+      wrapTextWithFixedBackground(ctx, text, textX, textY, maxWidth, fontSize);
 
-    const textX = canvas.width * 0.1; // 화면 왼쪽에 텍스트 배치
-    const textY = canvas.height * 0.1; // 화면의 상단에 텍스트 시작 위치 조정
-    wrapText(ctx, text, textX, textY, maxWidth, lineHeight);
-
-    const outputPath = path.join(__dirname, "output.png");
-    const buffer = canvas.toBuffer("image/png");
-    fs.writeFileSync(outputPath, buffer);
-    console.log(`이미지 저장 완료: ${outputPath}`);
-
-    return outputPath;
+      const outputPath = path.join(__dirname, `outputs/output${i + 1}.png`);
+      const buffer = canvas.toBuffer("image/png");
+      fs.writeFileSync(outputPath, buffer);
+      console.log(`이미지 저장 완료: ${outputPath}`);
+    }
   } catch (error) {
     console.error("이미지 생성 오류:", error);
     throw new Error("이미지 생성 실패: " + error.message);
