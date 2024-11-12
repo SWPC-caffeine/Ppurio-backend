@@ -15,14 +15,6 @@ const { createCanvas, loadImage, registerFont } = require("canvas"); // canvas �
 app.use(cors());  // CORS 미들웨어를 사용하여 모든 도메인에 요청 허용
 app.use(express.json());  // JSON 파싱을 위한 미들웨어 설정
 
-// 폰트 등록 (CustomSantteutDotum으로 이름 지정)
-const fontDirectory = path.join(
-  __dirname,
-  "fonts",
-  "HanSantteutDotum-Regular.ttf"
-);
-registerFont(fontDirectory, { family: "CustomSantteutDotum" });
-
 // OpenAI API 설정
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,  // 환경 변수에서 API 키 가져오기
@@ -132,47 +124,46 @@ app.post('/create', (req, res) => {
   // 응답 객체 생성 및 전송
   res.json({
     success: true,
-    filename: req.file ? req.file.filename : null, // 파일 업로드가 없을 경우 null로 설정
-    summary: '요약된 문단 예시', // 실제 요약된 내용을 추가합니다.
+    filename: filepath,
+    summary: textList,
   });
 });
 
 // OpenAI 인스턴스 방식으로 이미지 프롬프트 생성 및 이미지 요청
-function generatePrompt(description) {
-  const { description } = req.body;
+// 이미지 프롬프트 생성 함수
+async function generatePrompt(description) {
   try {
-      const gptResponse = await openai.chat.completions.create({
-          model: "gpt-4",
-          messages: [
-              {
-                  role: "system",
-                  content: `You are an assistant that generates image prompts for a promotional poster background. 
-                            Ensure no text or human figures are in the image. Focus on clean, abstract shapes and 
-                            symbolic elements that visually represent the topic. Limit the prompt to 1000 characters.`
-              },
-              {
-                  role: "user",
-                  content: `Generate a creative and visually appealing image prompt for a company’s promotional poster 
-                            background based on the following summary, under 1000 characters: ${description}`
-              }
-          ],
-          temperature: 0.5
-      });
+    const gptResponse = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [
+        {
+          role: "system",
+          content: `You are an assistant that generates image prompts for a promotional poster background. 
+                    Ensure no text or human figures are in the image. Focus on clean, abstract shapes and 
+                    symbolic elements that visually represent the topic. Limit the prompt to 1000 characters.`
+        },
+        {
+          role: "user",
+          content: `Generate a creative and visually appealing image prompt for a company’s promotional poster 
+                    background based on the following summary, under 1000 characters: ${description}`
+        }
+      ],
+      temperature: 0.5
+    });
 
-      const imagePrompt = gptResponse.choices[0].message.content.trim();
+    const imagePrompt = gptResponse.choices[0].message.content.trim();
+    const dalleResponse = await openai.images.generate({
+      prompt: imagePrompt,
+      n: 4,
+      size: "1024x1024"
+    });
 
-      const dalleResponse = await openai.images.generate({
-          prompt: imagePrompt,
-          n: 4,
-          size: "1024x1024"
-      });
-
-      const imageUrls = dalleResponse.data.map(item => item.url);
-
+    return dalleResponse.data.map(item => item.url);
   } catch (error) {
-      console.error('Error generating image:', error.response ? error.response.data : error.message);
+    console.error('Error generating image:', error.response ? error.response.data : error.message);
+    throw error;
   }
-});
+}
 
 // 서버 실행
 app.listen(port, () => {
