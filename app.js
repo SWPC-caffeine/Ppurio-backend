@@ -67,101 +67,6 @@ const summarizeText = async (text, userText) => {
   return response.choices[0].message.content; // 요약된 텍스트 반환
 };
 
-const generateImageWithText = async (
-  text,
-  fontName = "CustomSantteutDotum"
-) => {
-  const images = [
-    "images/1-5/background2-5.png",
-    "images/1-5/background2-6.png",
-    "images/2-5/background1-1.png",
-    "images/2-5/background1-7.png",
-  ];
-
-  try {
-    for (let i = 0; i < images.length; i++) {
-      const imagePath = path.join(__dirname, images[i]);
-      const image = await loadImage(imagePath);
-      const canvas = createCanvas(image.width, image.height);
-      const ctx = canvas.getContext("2d");
-
-      ctx.drawImage(image, 0, 0, image.width, image.height);
-
-      let fontSize = canvas.height * 0.15;
-      const minFontSize = 15; // 최소 폰트 크기 설정
-      const maxWidth = canvas.width * 0.8;
-      const lineHeightMultiplier = 2.2;
-
-      ctx.font = `bold ${fontSize}px "${fontName}"`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "top"; // 텍스트가 기준선 위쪽으로 정렬되도록 설정
-
-      const adjustFontSizeToFit = (text) => {
-        while (ctx.measureText(text).width > maxWidth && fontSize > minFontSize) {
-          fontSize -= 1;
-          ctx.font = `bold ${fontSize}px "${fontName}"`;
-        }
-      };
-      adjustFontSizeToFit(text);
-
-      const wrapTextWithFixedBackground = (ctx, text, x, y, maxWidth, fontSize) => {
-        const lineHeight = fontSize * lineHeightMultiplier;
-        const lines = [];
-        let line = "";
-        const words = text.split(" ");
-      
-        words.forEach((word) => {
-          const testLine = line + word + " ";
-          const testWidth = ctx.measureText(testLine).width;
-      
-          if (testWidth > maxWidth && line !== "") {
-            lines.push(line.trim());
-            line = word + " ";
-          } else {
-            line = testLine;
-          }
-        });
-        lines.push(line.trim());
-      
-        // 중앙보다 위쪽에 텍스트를 위치시키기 위해 y 값 조정
-        y -= (lines.length * lineHeight) / 2;
-      
-        // 고정된 배경 박스를 그리기 위한 설정
-        const backgroundHeight = canvas.height * 0.5; // 전체 높이의 50%를 배경으로 설정
-        const backgroundWidth = canvas.width * 0.8; // 전체 너비의 80%를 배경으로 설정
-        const backgroundX = (canvas.width - backgroundWidth) / 2; // 배경을 중앙에 위치시키기 위한 X 좌표
-        const backgroundY = (canvas.height - backgroundHeight) / 2; // 배경을 중앙에 위치시키기 위한 Y 좌표
-      
-        // 불투명한 검정색 배경 그리기
-        ctx.fillStyle = "rgba(0, 0, 0, 0.7)"; // 불투명한 검정색 배경
-        ctx.fillRect(backgroundX, backgroundY, backgroundWidth, backgroundHeight);
-      
-        // 텍스트 Y 위치 조정 (배경 중앙에 오도록)
-        y = backgroundY + (backgroundHeight - lines.length * lineHeight) * 0.1;
-      
-        // 각 줄의 텍스트 그리기
-        lines.forEach((line) => {
-          ctx.fillStyle = "white";
-          ctx.fillText(line, x, y);
-          y += lineHeight;
-        });
-      };
-
-      const textX = canvas.width / 2;
-      const textY = canvas.height * 0.25; // 텍스트를 화면 상단에 더 가깝게 배치
-      wrapTextWithFixedBackground(ctx, text, textX, textY, maxWidth, fontSize);
-
-      const outputPath = path.join(__dirname, `outputs/output${i + 1}.png`);
-      const buffer = canvas.toBuffer("image/png");
-      fs.writeFileSync(outputPath, buffer);
-      console.log(`이미지 저장 완료: ${outputPath}`);
-    }
-  } catch (error) {
-    console.error("이미지 생성 오류:", error);
-    throw new Error("이미지 생성 실패: " + error.message);
-  }
-};
-
 // 홍보 텍스트 작성하는 함수
 const createPromotionText = async (summarizedText) => {
   const startTime = Date.now();  // 시작 시간 기록
@@ -170,11 +75,23 @@ const createPromotionText = async (summarizedText) => {
     messages: [{ role: 'user', content: `다음 텍스트를 홍보 메시지로 작성해줘.\n\n${summarizedText}\n` }],
   });
   const endTime = Date.now();  // 종료 시간 기록
-  console.log(`\n홍보 텍스트 생성 시간: ${endTime - startTime}ms`);  // 실행 시간 출력
+  console.log(`\n홍보 텍스트 메시지 생성 시간: ${endTime - startTime}ms`);  // 실행 시간 출력
   return response.choices[0].message.content; // 홍보 텍스트 반환
 };
 
-// 파일 업로드를 처리하는 라우트
+// 홍보 포스터 문구 작성하는 함수
+const createPosterText = async (summarizedText) => {
+  const startTime = Date.now();  // 시작 시간 기록
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4',
+    messages: [{ role: 'user', content: `제목 날짜 장소가 있다면 포함해줘\n\n${summarizedText}\n` }],
+  });
+  const endTime = Date.now();  // 종료 시간 기록
+  console.log(`\n홍보 포스터 텍스트 생성 시간: ${endTime - startTime}ms`);  // 실행 시간 출력
+  return response.choices[0].message.content; // 홍보 텍스트 반환
+};
+
+// pdf 업로드를 처리하는 라우트
 app.post('/upload', upload.single('file'), async (req, res) => {
   try {
     const userText = req.body.userText;  // 사용자가 입력한 텍스트 받기
@@ -184,10 +101,6 @@ app.post('/upload', upload.single('file'), async (req, res) => {
     const extractedText = await extractTextFromPDF(filePath);
     const summarizedText = await summarizeText(extractedText, userText); // 텍스트 요약 (userText 포함)
     console.log('요약된 내용:' + summarizedText);
-    const promotionText = await createPromotionText(summarizedText); // 홍보 텍스트 생성
-    console.log('홍보 텍스트: ' + promotionText);
-
-    const outputImagePath = await generateImageWithText(summarizedText);
 
     res.json({
       success: true,
@@ -201,10 +114,33 @@ app.post('/upload', upload.single('file'), async (req, res) => {
   }
 });
 
-// OpenAI 인스턴스 방식으로 이미지 프롬프트 생성 및 이미지 요청
-app.post('/generate-image', async (req, res) => {
-  const { description } = req.body;
+// '\n' 없애기
+function removeNewlines(text) {
+  return text.replace(/\n/g, '');
+}
 
+// pdf 요약된걸 사용자가 수정하고 다음 눌렀을 때
+app.post('/create', (req, res) => {
+  // req.body에서 text 가져오기
+  let text = req.body.text;
+  // 1. '\n' 없애기
+  text = removeNewlines(text);
+  // 2. generatePrompt 함수 실행
+  const filepath = generatePrompt(text);
+  // 3. posterMessage 함수 실행
+  const textList = await createPromotionText(text);
+
+  // 응답 객체 생성 및 전송
+  res.json({
+    success: true,
+    filename: req.file ? req.file.filename : null, // 파일 업로드가 없을 경우 null로 설정
+    summary: '요약된 문단 예시', // 실제 요약된 내용을 추가합니다.
+  });
+});
+
+// OpenAI 인스턴스 방식으로 이미지 프롬프트 생성 및 이미지 요청
+function generatePrompt(description) {
+  const { description } = req.body;
   try {
       const gptResponse = await openai.chat.completions.create({
           model: "gpt-4",
@@ -233,10 +169,9 @@ app.post('/generate-image', async (req, res) => {
       });
 
       const imageUrls = dalleResponse.data.map(item => item.url);
-      res.json({ imageUrls });
+
   } catch (error) {
       console.error('Error generating image:', error.response ? error.response.data : error.message);
-      res.status(500).json({ error: '이미지 생성 중 오류가 발생했습니다.' });
   }
 });
 
