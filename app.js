@@ -67,7 +67,7 @@ const summarizeText = async (text, userText) => {
   return response.choices[0].message.content; // 요약된 텍스트 반환
 };
 
-// 홍보 텍스트 작성하는 함수
+// 홍보 텍스트 작성하는 함수 사용할 진 모름(mms 구현하면 사용)
 const createPromotionText = async (summarizedText) => {
   const startTime = Date.now();  // 시작 시간 기록
   const response = await openai.chat.completions.create({
@@ -127,9 +127,8 @@ app.post('/create', (req, res) => {
   text = removeNewlines(text);
   // 2. generatePrompt 함수 실행
   const filepath = generatePrompt(text);
-  // 3. posterMessage 함수 실행
-  const textList = await createPromotionText(text);
-
+  // 3. poster 문단 만드는 함수 실행
+  const textList = await createPosterText(text);
   // 응답 객체 생성 및 전송
   res.json({
     success: true,
