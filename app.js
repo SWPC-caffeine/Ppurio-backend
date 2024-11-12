@@ -76,7 +76,7 @@ const createPosterText = async (summarizedText) => {
   const startTime = Date.now();  // 시작 시간 기록
   const response = await openai.chat.completions.create({
     model: 'gpt-4',
-    messages: [{ role: 'user', content: `제목 날짜 장소가 있다면 포함해줘\n\n${summarizedText}\n` }],
+    messages: [{ role: 'user', content: `포스터를 작성할 건데, 그 때 필요한 제목, 날짜, 장소가 있다면 포함해줘, 주요 내용 중에서도 핵심이 되는 내용만을 간단한 형태로 제공해줘 모든 내용은 '-' 로 구분해줘\n\n${summarizedText}\n` }],
   });
   const endTime = Date.now();  // 종료 시간 기록
   console.log(`\n홍보 포스터 텍스트 생성 시간: ${endTime - startTime}ms`);  // 실행 시간 출력
@@ -112,21 +112,24 @@ function removeNewlines(text) {
 }
 
 // pdf 요약된걸 사용자가 수정하고 다음 눌렀을 때
-app.post('/create', (req, res) => {
-  // req.body에서 text 가져오기
-  let text = req.body.text;
-  // 1. '\n' 없애기
-  text = removeNewlines(text);
-  // 2. generatePrompt 함수 실행
-  const filepath = generatePrompt(text);
-  // 3. poster 문단 만드는 함수 실행
-  const textList = await createPosterText(text);
-  // 응답 객체 생성 및 전송
-  res.json({
-    success: true,
-    filename: filepath,
-    summary: textList,
-  });
+app.post('/create', async (req, res) => {
+  try {
+    let text = req.body.text;
+    text = removeNewlines(text);
+    console.log('텍스트'+text);
+    console.log('----------------------------------\n');
+    const filepath = await generatePrompt(text);
+    const textList = await createPosterText(text);
+    console.log('파일패스: '+filepath);
+    console.log('리스트:' + textList);
+    res.json({
+      success: true,
+      filename: filepath,
+      summary: textList,
+    });
+  } catch (error) {
+    res.status(500).send('포스터 생성 실패: ' + error.message);
+  }
 });
 
 // OpenAI 인스턴스 방식으로 이미지 프롬프트 생성 및 이미지 요청
