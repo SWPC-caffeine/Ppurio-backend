@@ -177,7 +177,8 @@ async function downloadImages(urls) {
   const downloadPromises = urls.map(async (url) => {
     const response = await axios.get(url, { responseType: 'arraybuffer' });
     const timestamp = Date.now();
-    const imagePath = `images/poster_image_${timestamp}.png`;
+    const uniqueSuffix = Math.floor(Math.random() * 10000); // 랜덤 숫자 추가
+    const imagePath = `images/poster_image_${timestamp}_${uniqueSuffix}.png`;
     fs.writeFileSync(imagePath, response.data);
     return imagePath;
   });
