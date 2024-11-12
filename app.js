@@ -1,5 +1,5 @@
 require('dotenv').config(); // dotenv 모듈 초기화
-// const axios = require('axios');
+const axios = require('axios');
 const express = require('express');
 const multer = require('multer');
 const cors = require('cors');
@@ -14,6 +14,7 @@ const { createCanvas, loadImage, registerFont } = require("canvas"); // canvas �
 
 app.use(cors());  // CORS 미들웨어를 사용하여 모든 도메인에 요청 허용
 app.use(express.json());  // JSON 파싱을 위한 미들웨어 설정
+app.use('/images', express.static(path.join(__dirname, 'images')));
 
 // OpenAI API 설정
 const openai = new OpenAI({
@@ -98,8 +99,6 @@ app.post('/upload', upload.single('file'), async (req, res) => {
       success: true,
       filename: req.file.filename,
       summary: summarizedText,
-      promotionText: promotionText,
-      imagePath: outputImagePath,
     });
   } catch (err) {
     res.status(400).send('파일 업로드 실패: ' + err.message);
@@ -134,6 +133,8 @@ app.post('/create', async (req, res) => {
 
 // OpenAI 인스턴스 방식으로 이미지 프롬프트 생성 및 이미지 요청
 // 이미지 프롬프트 생성 함수
+
+// 이미지 생성 및 저장 함수
 async function generatePrompt(description) {
   try {
     const gptResponse = await openai.chat.completions.create({
@@ -161,12 +162,29 @@ async function generatePrompt(description) {
       size: "1024x1024"
     });
 
-    return dalleResponse.data.map(item => item.url);
+    const imageUrls = dalleResponse.data.map(item => item.url);
+    const savedImagePaths = await downloadImages(imageUrls);
+    return savedImagePaths;
+
   } catch (error) {
     console.error('Error generating image:', error.response ? error.response.data : error.message);
     throw error;
   }
 }
+
+// 이미지 다운로드 및 저장 함수
+async function downloadImages(urls) {
+  const downloadPromises = urls.map(async (url) => {
+    const response = await axios.get(url, { responseType: 'arraybuffer' });
+    const timestamp = Date.now();
+    const imagePath = `images/poster_image_${timestamp}.png`;
+    fs.writeFileSync(imagePath, response.data);
+    return imagePath;
+  });
+  return Promise.all(downloadPromises);
+}
+
+
 
 // 서버 실행
 app.listen(port, () => {
