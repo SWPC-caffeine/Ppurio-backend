@@ -54,7 +54,7 @@ const extractTextFromPDF = (filePath) => {
 const summarizeText = async (text, userText) => {
   const startTime = Date.now(); // 시작 시간 기록
   const response = await openai.chat.completions.create({
-    model: "gpt-4",
+    model: "gpt-3.5-turbo",
     messages: [
       {
         role: "user",
@@ -71,7 +71,7 @@ const summarizeText = async (text, userText) => {
 const createPromotionText = async (summarizedText) => {
   const startTime = Date.now(); // 시작 시간 기록
   const response = await openai.chat.completions.create({
-    model: "gpt-4",
+    model: "gpt-3.5-turbo",
     messages: [
       {
         role: "user",
@@ -88,7 +88,7 @@ const createPromotionText = async (summarizedText) => {
 const createPosterText = async (summarizedText) => {
   const startTime = Date.now(); // 시작 시간 기록
   const response = await openai.chat.completions.create({
-    model: "gpt-4",
+    model: "gpt-3.5-turbo",
     messages: [
       {
         role: "user",
@@ -141,7 +141,7 @@ app.post("/create", async (req, res) => {
 
     res.json({
       success: true,
-      imagePaths: imagePaths.map((path) => `http://localhost:${port}/${path}`), // 절대 URL로 변환하여 클라이언트에 전달
+      imagePaths: imagePaths.map((path) => `http://223.194.133.27:${port}/${path}`), // 절대 URL로 변환하여 클라이언트에 전달
       summary: textList,
     });
   } catch (error) {
@@ -156,7 +156,7 @@ app.post("/create", async (req, res) => {
 async function generatePrompt(description) {
   try {
     const gptResponse = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-3.5-turbo",
       messages: [
         {
           role: "system",
