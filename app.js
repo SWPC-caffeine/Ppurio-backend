@@ -186,6 +186,7 @@ async function generatePrompt(description) {
     });
 
     const imageUrls = dalleResponse.data.map((item) => item.url);
+    console.log('이미지 url 4개 :'+imageUrls);
     return imageUrls;
   } catch (error) {
     console.error(
