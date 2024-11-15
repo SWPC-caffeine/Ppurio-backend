@@ -134,15 +134,17 @@ app.post("/create", async (req, res) => {
     text = removeNewlines(text);
     console.log("텍스트: " + text);
     console.log("----------------------------------\n");
-    const imagePaths = await generatePrompt(text); // 수정된 부분: 이미지 경로 배열을 받음
+
+    // 이미지 URL 생성
+    const imageUrls = await generatePrompt(text);
+
+    // 텍스트 생성 (포스터 내용)
     const textList = await createPosterText(text);
-    console.log("이미지 경로:", imagePaths);
-    console.log("리스트:", textList);
 
     res.json({
       success: true,
-      imagePaths: imagePaths.map((path) => `http://223.194.133.27:${port}/${path}`), // 절대 URL로 변환하여 클라이언트에 전달
-      summary: textList,
+      imageUrls, // 이미지 URL 배열을 반환
+      summary: textList, // 요약된 텍스트 반환
     });
   } catch (error) {
     res.status(500).send("포스터 생성 실패: " + error.message);
@@ -152,17 +154,20 @@ app.post("/create", async (req, res) => {
 // OpenAI 인스턴스 방식으로 이미지 프롬프트 생성 및 이미지 요청
 // 이미지 프롬프트 생성 함수
 
-// 이미지 생성 및 저장 함수
+// 이미지 프롬프트 생성 및 URL 반환 함수
 async function generatePrompt(description) {
   try {
     const gptResponse = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: "gpt-4",
       messages: [
         {
           role: "system",
           content: `You are an assistant that generates image prompts for a promotional poster background. 
-                    Ensure no text or human figures are in the image. Focus on clean, abstract shapes and 
-                    symbolic elements that visually represent the topic. Limit the prompt to 1000 characters.`,
+                    Ensure the image does not contain any text, letters, numbers, symbols, or words. 
+                    Focus solely on clean, abstract shapes, harmonious colors, and symbolic elements 
+                    that convey the essence of the topic. The background should visually engage viewers 
+                    without any distracting textual content. Provide a modern, minimalist design. Limit 
+                    the prompt to 1000 characters.`,
         },
         {
           role: "user",
@@ -181,8 +186,7 @@ async function generatePrompt(description) {
     });
 
     const imageUrls = dalleResponse.data.map((item) => item.url);
-    const savedImagePaths = await downloadImages(imageUrls);
-    return savedImagePaths;
+    return imageUrls;
   } catch (error) {
     console.error(
       "Error generating image:",
