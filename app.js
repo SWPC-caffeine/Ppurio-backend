@@ -7,6 +7,7 @@ const path = require("path");
 const fs = require("fs"); // 파일 시스템 모듈
 const pdf = require("pdf-parse"); // pdf-parse 모듈
 const OpenAI = require("openai"); // OpenAI 모듈
+const bodyParser = require("body-parser");
 const app = express();
 const port = 3030;
 const sharp = require("sharp");
@@ -15,6 +16,7 @@ const { createCanvas, loadImage, registerFont } = require("canvas"); // canvas �
 app.use(cors()); // CORS 미들웨어를 사용하여 모든 도메인에 요청 허용
 app.use(express.json()); // JSON 파싱을 위한 미들웨어 설정
 app.use("/images", express.static(path.join(__dirname, "images")));
+app.use(bodyParser.json({ limit: "10mb" })); // 이미지 크기에 맞게 limit 조정
 
 
 // OpenAI API 설정
@@ -33,6 +35,7 @@ const storage = multer.diskStorage({
   },
 });
 const upload = multer({ storage: storage });
+const upload2 = multer({ dest: "edit-images/" }); // Multer 설정
 
 // PDF에서 텍스트를 추출하는 함수
 const extractTextFromPDF = (filePath) => {
@@ -159,9 +162,26 @@ app.post("/create", async (req, res) => {
   }
 });
 
-// OpenAI 인스턴스 방식으로 이미지 프롬프트 생성 및 이미지 요청
-// 이미지 프롬프트 생성 함수
+// 업로드 엔드포인트
+app.post("/upload-image", upload2.single("image"), async (req, res) => {
+  console.log('upload-image url 호출');
+  if (!req.file) {
+    return res.status(400).send("파일이 업로드되지 않았습니다.");
+  }
+  const summarizedText = req.body.summarizedText;
+  // summarizedText가 없으면 에러 처리
+  if (!summarizedText) {
+    return res.status(400).send("summarizedText가 필요합니다.");
+  }
+  const promotionText = await createPromotionText(summarizedText); // 홍보 메시지 생성
+  res.send({
+    message: "파일 업로드 성공",
+    filePath: `/edit-images/${req.file.filename}`,
+    promotionText: promotionText, // 생성된 홍보 메시지 포함
+  });
+});
 
+// OpenAI 인스턴스 방식으로 이미지 프롬프트 생성 및 이미지 요청
 // 이미지 프롬프트 생성 및 URL 반환 함수
 async function generatePrompt(description) {
   try {
@@ -203,25 +223,6 @@ async function generatePrompt(description) {
     );
     throw error;
   }
-}
-
-// 이미지 다운로드 및 저장 함수
-async function downloadImages(urls) {
-  const downloadPromises = urls.map(async (url) => {
-    const response = await axios.get(url, { responseType: "arraybuffer" });
-    const timestamp = Date.now();
-    const uniqueSuffix = Math.floor(Math.random() * 10000); // 랜덤 숫자 추가
-    const imagePath = `images/poster_image_${timestamp}_${uniqueSuffix}.jpeg`;
-    
-    // 이미지 데이터를 Sharp으로 처리하여 JPEG로 변환
-    await sharp(response.data)
-    .jpeg({ quality: 80 }) // JPEG로 변환 및 품질 설정 (원하는 품질로 조정 가능)
-    .toFile(imagePath);
-  
-    fs.writeFileSync(imagePath, response.data);
-    return imagePath;
-  });
-  return Promise.all(downloadPromises);
 }
 
 const API_URL = "https://message.ppurio.com";
