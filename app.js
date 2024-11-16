@@ -16,6 +16,7 @@ app.use(cors()); // CORS 미들웨어를 사용하여 모든 도메인에 요청
 app.use(express.json()); // JSON 파싱을 위한 미들웨어 설정
 app.use("/images", express.static(path.join(__dirname, "images")));
 
+
 // OpenAI API 설정
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY, // 환경 변수에서 API 키 가져오기
@@ -52,20 +53,27 @@ const extractTextFromPDF = (filePath) => {
 
 // OpenAI를 사용하여 텍스트를 요약하는 함수
 const summarizeText = async (text, userText) => {
-  const startTime = Date.now(); // 시작 시간 기록
-  const response = await openai.chat.completions.create({
-    model: "gpt-3.5-turbo",
-    messages: [
-      {
-        role: "user",
-        content: `: ${userText} 머리글 기호로 짧게 작성해. 번호 매기지 말고 요약 내용만 바로 출력해\n\n${text}\n`,
-      },
-    ],
-  });
-  const endTime = Date.now(); // 종료 시간 기록
-  console.log(`텍스트 요약 시간: ${endTime - startTime}ms`); // 실행 시간 출력
-  return response.choices[0].message.content; // 요약된 텍스트 반환
+  try {
+    const startTime = Date.now(); // 시작 시간 기록
+    const response = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        {
+          role: "user",
+          content: `: ${userText} 그리고 머리글 기호로 짧게 작성해. 번호 매기지 말고 요약 내용만 바로 출력해\n\n${text}\n`,
+        },
+      ],
+    });
+    const endTime = Date.now(); // 종료 시간 기록
+    console.log(`텍스트 요약 시간: ${endTime - startTime}ms`); // 실행 시간 출력
+    return response.choices[0].message.content; // 요약된 텍스트 반환
+  } catch (error) {
+    console.error("텍스트 요약 중 에러 발생:", error.message); // 에러 메시지 출력
+    console.error("에러 세부정보:", error); // 자세한 에러 정보 출력
+    return "요약을 처리하는 동안 문제가 발생했습니다. 다시 시도해 주세요."; // 사용자에게 반환할 메시지
+  }
 };
+
 
 // 홍보 텍스트 작성하는 함수 사용할 진 모름(mms 구현하면 사용)
 const createPromotionText = async (summarizedText) => {
@@ -215,6 +223,104 @@ async function downloadImages(urls) {
   });
   return Promise.all(downloadPromises);
 }
+
+const API_URL = "https://message.ppurio.com";
+const USER_NAME = "dkdk6517";
+const TOKEN = process.env.PPURIO_API_KEY;
+
+// 액세스 토큰 발급 함수
+async function getAccessToken() {
+  try {
+    const response = await axios.post(
+      `${API_URL}/v1/token`,
+      {},
+      {
+        auth: {
+          username: USER_NAME,
+          password: TOKEN,
+        },
+      }
+    );
+    console.log('엑세스 토큰 발급 완료');
+    return response.data.token;
+  } catch (error) {
+    console.error("Error getting access token:", error.response?.data || error);
+    return null;
+  }
+}
+
+
+async function sendMMS(accessToken, messageContent, recipient, fileUrl, fileName) {
+  // fileUrl에서 파일을 읽기 (파일 경로로 변환하여 읽어야 함)
+  const image = fs.readFileSync(fileUrl);  // fileUrl을 실제 경로로 지정해야 합니다
+  const base64Image = image.toString('base64');  // Base64로 변환
+
+  const fileData = {
+    name: fileName,  // 파일 이름
+    size: image.length,  // 파일 크기 (byte 단위)
+    data: base64Image,  // Base64 인코딩된 이미지 데이터
+  };
+
+  try {
+    const response = await axios.post(
+      `${API_URL}/v1/message`,  // 실제 API URL을 사용
+      {
+        account: USER_NAME,
+        messageType: 'MMS',  // MMS 지정
+        content: messageContent,  // 메시지 내용
+        from: '01084356517',  // 발신번호
+        duplicateFlag: 'N',
+        rejectType: 'AD',
+        refKey: 'ref_key',
+        targetCount: 1,
+        targets: [
+          {
+            to: recipient.to,  // 수신자 번호
+            name: recipient.name,  // 수신자 이름
+            changeWord: recipient.changeWord,  // 치환문자
+          },
+        ],
+        files: [fileData],  // Base64로 인코딩된 이미지 데이터 포함
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    console.log('메시지 전송 성공');
+    return response.data.messageKey;
+  } catch (error) {
+    console.error('Error sending MMS:', error.response?.data || error);
+    return null;
+  }
+}
+
+app.post("/send-mms", async (req, res) => {
+  const { messageContent, recipient, fileUrl, fileName } = req.body;
+
+  // fileUrl과 fileName이 모두 있는지 확인
+  if (!fileUrl || !fileName) {
+    return res.status(400).json({ error: "fileUrl and fileName are required" });
+  }
+
+  // 액세스 토큰 발급
+  const accessToken = await getAccessToken();
+  if (!accessToken) {
+    return res.status(500).json({ error: "Failed to get access token" });
+  }
+
+  // MMS 전송 함수 호출
+  const messageKey = await sendMMS(accessToken, messageContent, recipient, fileUrl, fileName);
+  if (!messageKey) {
+    return res.status(500).json({ error: "Failed to send MMS" });
+  }
+
+  res.json({ messageKey });
+});
+
 
 // 서버 실행
 app.listen(port, () => {
