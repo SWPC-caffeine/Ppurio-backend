@@ -204,7 +204,7 @@ async function downloadImages(urls) {
     const imagePath = `images/poster_image_${timestamp}_${uniqueSuffix}.jpeg`;
     // 이미지 데이터를 Sharp으로 처리하여 JPEG로 변환
     await sharp(response.data)
-    .jpeg({ quality: 60 }) // JPEG로 변환 및 품질 설정 (원하는 품질로 조정 가능)
+    .jpeg({ quality: 55 }) // JPEG로 변환 및 품질 설정 (원하는 품질로 조정 가능)
     .toFile(imagePath);
   
     fs.writeFileSync(imagePath, response.data);
