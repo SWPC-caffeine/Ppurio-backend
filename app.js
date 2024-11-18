@@ -176,7 +176,7 @@ app.post("/upload-image", upload2.single("image"), async (req, res) => {
   const promotionText = await createPromotionText(summarizedText); // 홍보 메시지 생성
   res.send({
     message: "파일 업로드 성공",
-    filePath: `/edit-images/${req.file.filename}`,
+    filePath: `/edit-images/${req.file.filename}.png`,
     promotionText: promotionText, // 생성된 홍보 메시지 포함
   });
 });
