@@ -16,6 +16,7 @@ const { createCanvas, loadImage, registerFont } = require("canvas"); // canvas �
 app.use(cors()); // CORS 미들웨어를 사용하여 모든 도메인에 요청 허용
 app.use(express.json()); // JSON 파싱을 위한 미들웨어 설정
 app.use("/images", express.static(path.join(__dirname, "images")));
+app.use("/edit-images", express.static(path.join(__dirname, "edit-images")));
 app.use(bodyParser.json({ limit: "10mb" })); // 이미지 크기에 맞게 limit 조정
 
 app.use(cors({
@@ -41,8 +42,17 @@ const storage = multer.diskStorage({
     cb(null, uniqueSuffix + path.extname(file.originalname)); // 파일 이름 설정
   },
 });
+
+const upload2 = multer({
+  dest: "edit-images/", // 업로드된 파일이 저장될 디렉토리
+  filename: (req, file, cb) => {
+    // 파일 이름에 .jpeg 확장자 붙이기
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9); // 고유한 파일 이름
+    cb(null, uniqueSuffix + ".jpeg");  // .jpeg 확장자 붙여서 파일 이름 설정
+  }
+});
 const upload = multer({ storage: storage });
-const upload2 = multer({ dest: "edit-images/" }); // Multer 설정
+//const upload2 = multer({ dest: "edit-images/" }); // Multer 설정
 
 // PDF에서 텍스트를 추출하는 함수
 const extractTextFromPDF = (filePath) => {
@@ -70,7 +80,7 @@ const summarizeText = async (text, userText) => {
       messages: [
         {
           role: "user",
-          content: `: ${userText} 그리고 머리글 기호로 짧게 작성해. 번호 매기지 말고 요약 내용만 바로 출력해\n\n${text}\n`,
+          content: `: ${userText} 그리고 반드시 머리글 기호로 짧게 작성해. 번호 매기지 말고 요약 내용만 바로 출력해\n\n${text}\n`,
         },
       ],
     });
@@ -215,7 +225,7 @@ app.post("/upload-image", upload2.single("image"), async (req, res) => {
   const promotionText = await createPromotionText(summarizedText); // 홍보 메시지 생성
   res.send({
     message: "파일 업로드 성공",
-    filePath: `/edit-images/${req.file.filename}.png`,
+    filePath: `/edit-images/${req.file.filename}.jpeg`,
     promotionText: promotionText, // 생성된 홍보 메시지 포함
   });
 });
@@ -289,8 +299,7 @@ async function getAccessToken() {
   }
 }
 
-
-async function sendMMS(accessToken, messageContent, recipient, fileUrl, fileName) {
+async function sendMMS(accessToken, messageContent, sender, recipients, fileUrl, fileName) {
   // fileUrl에서 파일을 읽기 (파일 경로로 변환하여 읽어야 함)
   const image = fs.readFileSync(fileUrl);  // fileUrl을 실제 경로로 지정해야 합니다
   const base64Image = image.toString('base64');  // Base64로 변환
@@ -302,24 +311,25 @@ async function sendMMS(accessToken, messageContent, recipient, fileUrl, fileName
   };
 
   try {
+    // 수신자 정보를 targets 배열로 설정
+    const targets = recipients.map((recipient) => ({
+      to: recipient.to,  // 수신자 번호
+      name: recipient.name || "",  // 수신자 이름 (선택적)
+      changeWord: recipient.changeWord || "",  // 치환문자 (선택적)
+    }));
+
     const response = await axios.post(
       `${API_URL}/v1/message`,  // 실제 API URL을 사용
       {
         account: USER_NAME,
         messageType: 'MMS',  // MMS 지정
         content: messageContent,  // 메시지 내용
-        from: '01084356517',  // 발신번호
+        from: sender,  // 발신번호
         duplicateFlag: 'N',
         rejectType: 'AD',
         refKey: 'ref_key',
-        targetCount: 1,
-        targets: [
-          {
-            to: recipient.to,  // 수신자 번호
-            name: recipient.name,  // 수신자 이름
-            changeWord: recipient.changeWord,  // 치환문자
-          },
-        ],
+        targetCount: recipients.length,  // 수신자 수
+        targets: targets,  // 수신자 배열
         files: [fileData],  // Base64로 인코딩된 이미지 데이터 포함
       },
       {
@@ -339,7 +349,12 @@ async function sendMMS(accessToken, messageContent, recipient, fileUrl, fileName
 }
 
 app.post("/send-mms", async (req, res) => {
-  const { messageContent, recipient, fileUrl, fileName } = req.body;
+  const { messageContent, sender, recipients, fileUrl, fileName } = req.body;  // 메시지 내용, 발신자, 수신자, 파일 url ,파일 이름
+
+  // 발신자 번호와 수신자 번호가 모두 있는지 확인
+  if (!sender || !recipients || recipients.length === 0) {
+    return res.status(400).json({ error: "Sender and recipients are required" });
+  }
 
   // fileUrl과 fileName이 모두 있는지 확인
   if (!fileUrl || !fileName) {
@@ -353,13 +368,14 @@ app.post("/send-mms", async (req, res) => {
   }
 
   // MMS 전송 함수 호출
-  const messageKey = await sendMMS(accessToken, messageContent, recipient, fileUrl, fileName);
+  const messageKey = await sendMMS(accessToken, messageContent, sender, recipients, fileUrl, fileName);
   if (!messageKey) {
     return res.status(500).json({ error: "Failed to send MMS" });
   }
 
   res.json({ messageKey });
 });
+
 
 
 // 서버 실행
