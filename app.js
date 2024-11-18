@@ -25,8 +25,6 @@ app.use(cors({
   allowedHeaders: ["Content-Type", "Authorization"], // 허용할 헤더
 }));
 
-
-
 // OpenAI API 설정
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY, // 환경 변수에서 API 키 가져오기
@@ -44,13 +42,17 @@ const storage = multer.diskStorage({
 });
 
 const upload2 = multer({
-  dest: "edit-images/", // 업로드된 파일이 저장될 디렉토리
-  filename: (req, file, cb) => {
-    // 파일 이름에 .jpeg 확장자 붙이기
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9); // 고유한 파일 이름
-    cb(null, uniqueSuffix + ".jpeg");  // .jpeg 확장자 붙여서 파일 이름 설정
-  }
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      cb(null, "edit-images/"); // 파일 저장 경로
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9); // 고유한 파일 이름 생성
+      cb(null, `${uniqueSuffix}.jpeg`); // 파일 이름에 .jpeg 확장자 추가
+    },
+  }),
 });
+
 const upload = multer({ storage: storage });
 //const upload2 = multer({ dest: "edit-images/" }); // Multer 설정
 
@@ -202,7 +204,7 @@ async function downloadImages(urls) {
     const imagePath = `images/poster_image_${timestamp}_${uniqueSuffix}.jpeg`;
     // 이미지 데이터를 Sharp으로 처리하여 JPEG로 변환
     await sharp(response.data)
-    .jpeg({ quality: 80 }) // JPEG로 변환 및 품질 설정 (원하는 품질로 조정 가능)
+    .jpeg({ quality: 60 }) // JPEG로 변환 및 품질 설정 (원하는 품질로 조정 가능)
     .toFile(imagePath);
   
     fs.writeFileSync(imagePath, response.data);
@@ -225,7 +227,7 @@ app.post("/upload-image", upload2.single("image"), async (req, res) => {
   const promotionText = await createPromotionText(summarizedText); // 홍보 메시지 생성
   res.send({
     message: "파일 업로드 성공",
-    filePath: `/edit-images/${req.file.filename}.jpeg`,
+    filePath: `/edit-images/${req.file.filename}`,
     promotionText: promotionText, // 생성된 홍보 메시지 포함
   });
 });
@@ -300,8 +302,11 @@ async function getAccessToken() {
 }
 
 async function sendMMS(accessToken, messageContent, sender, recipients, fileUrl, fileName) {
-  // fileUrl에서 파일을 읽기 (파일 경로로 변환하여 읽어야 함)
-  const image = fs.readFileSync(fileUrl);  // fileUrl을 실제 경로로 지정해야 합니다
+  // fileUrl을 로컬 파일 경로로 변환
+  const localFilePath = fileUrl.replace('http://223.194.130.33:3030', 'c:\\Users\\LDG\\Desktop\\프캡\\project');
+
+  // 로컬 경로에서 파일 읽기
+  const image = fs.readFileSync(localFilePath);  // 실제 로컬 경로로 파일 읽기
   const base64Image = image.toString('base64');  // Base64로 변환
 
   const fileData = {
@@ -375,7 +380,6 @@ app.post("/send-mms", async (req, res) => {
 
   res.json({ messageKey });
 });
-
 
 
 // 서버 실행
