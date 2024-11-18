@@ -18,6 +18,13 @@ app.use(express.json()); // JSON 파싱을 위한 미들웨어 설정
 app.use("/images", express.static(path.join(__dirname, "images")));
 app.use(bodyParser.json({ limit: "10mb" })); // 이미지 크기에 맞게 limit 조정
 
+app.use(cors({
+  origin: "http://localhost:3000", // 클라이언트 도메인 설정
+  methods: ["GET", "POST"], // 허용할 HTTP 메서드
+  allowedHeaders: ["Content-Type", "Authorization"], // 허용할 헤더
+}));
+
+
 
 // OpenAI API 설정
 const openai = new OpenAI({
@@ -142,25 +149,57 @@ function removeNewlines(text) {
 app.post("/create", async (req, res) => {
   try {
     let text = req.body.text;
-    text = removeNewlines(text);
+    text = removeNewlines(text); // '\n' 제거
     console.log("텍스트: " + text);
     console.log("----------------------------------\n");
 
     // 이미지 URL 생성
     const imageUrls = await generatePrompt(text);
 
+    // 이미지 다운로드 및 저장
+    const savedImagePaths = await downloadImages(imageUrls);
+
     // 텍스트 생성 (포스터 내용)
     const textList = await createPosterText(text);
 
+    const serverUrl = "http://223.194.130.33:3030"; // 서버 IP와 포트를 설정하세요.
+    const publicImagePaths = savedImagePaths.map((imagePath) =>
+      `${serverUrl}/images/${path.basename(imagePath)}`
+    );
+
+    // 저장된 이미지 경로를 ','로 연결
+    const joinedImagePaths = publicImagePaths.join(',');
+    console.log(joinedImagePaths);
+
     res.json({
       success: true,
-      imageUrls, // 이미지 URL 배열을 반환
+      imageUrls: joinedImagePaths, // ','로 연결된 이미지 경로 반환
       summary: textList, // 요약된 텍스트 반환
     });
   } catch (error) {
+    console.error("포스터 생성 실패:", error.message);
     res.status(500).send("포스터 생성 실패: " + error.message);
   }
 });
+
+
+// 이미지 다운로드 및 저장 함수
+async function downloadImages(urls) {
+  const downloadPromises = urls.map(async (url) => {
+    const response = await axios.get(url, { responseType: "arraybuffer" });
+    const timestamp = Date.now();
+    const uniqueSuffix = Math.floor(Math.random() * 10000); // 랜덤 숫자 추가
+    const imagePath = `images/poster_image_${timestamp}_${uniqueSuffix}.jpeg`;
+    // 이미지 데이터를 Sharp으로 처리하여 JPEG로 변환
+    await sharp(response.data)
+    .jpeg({ quality: 80 }) // JPEG로 변환 및 품질 설정 (원하는 품질로 조정 가능)
+    .toFile(imagePath);
+  
+    fs.writeFileSync(imagePath, response.data);
+    return imagePath;
+  });
+  return Promise.all(downloadPromises);
+}
 
 // 업로드 엔드포인트
 app.post("/upload-image", upload2.single("image"), async (req, res) => {
