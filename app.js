@@ -82,7 +82,7 @@ const summarizeText = async (text, userText) => {
       messages: [
         {
           role: "user",
-          content: `${userText} 텍스트의 길이가 이미지의 가로 길이보다 길어지지 않도록 줄바꿈해서 다음 줄에 요약해. 반드시 머리글 기호를 앞에 붙여서 짧게 작성해. 각 행에 번호 매기지 말고 요약 내용만 바로 출력해.\n\n${text}\n`,
+          content: `: ${userText} 그리고 반드시 머리글 기호로 짧게 작성해. 번호 매기지 말고 요약 내용만 바로 출력해\n\n${text}\n`,
         },
       ],
     });
@@ -116,23 +116,20 @@ const createPromotionText = async (summarizedText) => {
 
 // 홍보 포스터 문구 작성하는 함수
 const createPosterText = async (summarizedText) => {
-  try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [
-        {
-          role: "user",
-          content: `포스터를 작성할 건데, 그 때 필요한 제목, 날짜, 장소가 있다면 포함해줘, 주요 내용 중에서도 핵심이 되는 내용만을 간단한 형태로 제공해줘 모든 내용은 '-' 로 구분해줘\n\n${summarizedText}\n`,
-        },
-      ],
-    });
-    return response.choices[0].message.content;
-  } catch (error) {
-    console.error("Error in createPosterText:", error.message);
-    return "- 텍스트 생성 실패"; // 오류 발생 시 기본 텍스트 반환
-  }
+  const startTime = Date.now(); // 시작 시간 기록
+  const response = await openai.chat.completions.create({
+    model: "gpt-3.5-turbo",
+    messages: [
+      {
+        role: "user",
+        content: `포스터를 작성할 건데, 그 때 필요한 제목, 날짜, 장소가 있다면 포함해줘, 주요 내용 중에서도 핵심이 되는 내용만을 간단한 형태로 제공해줘 모든 내용은 '-' 로 구분해줘\n\n${summarizedText}\n`,
+      },
+    ],
+  });
+  const endTime = Date.now(); // 종료 시간 기록
+  console.log(`\n홍보 포스터 텍스트 생성 시간: ${endTime - startTime}ms`); // 실행 시간 출력
+  return response.choices[0].message.content; // 홍보 텍스트 반환
 };
-
 
 // pdf 업로드를 처리하는 라우트
 app.post("/upload", upload.single("file"), async (req, res) => {
@@ -163,32 +160,33 @@ function removeNewlines(text) {
 // pdf 요약된걸 사용자가 수정하고 다음 눌렀을 때
 app.post("/create", async (req, res) => {
   try {
-    let text = req.body.text || '';
-    text = removeNewlines(text).trim(); // '\n' 제거 및 트림 처리
-    console.log("텍스트: ", text);
+    let text = req.body.text;
+    text = removeNewlines(text); // '\n' 제거
+    console.log("텍스트: " + text);
+    console.log("----------------------------------\n");
 
-    // Step 1: 이미지 URL 생성 및 텍스트 생성 (병렬 처리)
-    const [imageUrls, textList] = await Promise.all([
-      generatePrompt(text),  // 이미지 URL 생성
-      createPosterText(text) // 포스터 텍스트 생성
-    ]);
+    // 이미지 URL 생성
+    const imageUrls = await generatePrompt(text);
 
-    // Step 2: 이미지 다운로드
+    // 이미지 다운로드 및 저장
     const savedImagePaths = await downloadImages(imageUrls);
 
-    // Step 3: 이미지 URL 생성
-    const serverUrl = "http://223.194.130.33:3030"; // 서버 IP와 포트
-    console.log('---------------------------');
+    // 텍스트 생성 (포스터 내용)
+    const textList = await createPosterText(text);
+
+    const serverUrl = "http://223.194.130.33:3030"; // 서버 IP와 포트를 설정하세요.
     const publicImagePaths = savedImagePaths.map((imagePath) =>
       `${serverUrl}/images/${path.basename(imagePath)}`
     );
-    console.log(publicImagePaths[0]);
 
-    // Step 4: 응답 반환
+    // 저장된 이미지 경로를 ','로 연결
+    const joinedImagePaths = publicImagePaths.join(',');
+    console.log(joinedImagePaths);
+
     res.json({
       success: true,
-      imageUrls: publicImagePaths[0],
-      summary: textList 
+      imageUrls: joinedImagePaths, // ','로 연결된 이미지 경로 반환
+      summary: textList, // 요약된 텍스트 반환
     });
   } catch (error) {
     console.error("포스터 생성 실패:", error.message);
@@ -199,21 +197,20 @@ app.post("/create", async (req, res) => {
 
 // 이미지 다운로드 및 저장 함수
 async function downloadImages(urls) {
-  return Promise.all(
-    urls.map(async (url) => {
-      const response = await axios.get(url, { responseType: "arraybuffer" });
-      const timestamp = Date.now();
-      const uniqueSuffix = Math.floor(Math.random() * 10000);
-      const imagePath = `images/poster_image_${timestamp}_${uniqueSuffix}.jpeg`;
-
-      // Sharp를 사용하여 이미지 저장
-      await sharp(response.data)
-        .jpeg({ quality: 50 })
-        .toFile(imagePath);
-
-      return imagePath;
-    })
-  );
+  const downloadPromises = urls.map(async (url) => {
+    const response = await axios.get(url, { responseType: "arraybuffer" });
+    const timestamp = Date.now();
+    const uniqueSuffix = Math.floor(Math.random() * 10000); // 랜덤 숫자 추가
+    const imagePath = `images/poster_image_${timestamp}_${uniqueSuffix}.jpeg`;
+    // 이미지 데이터를 Sharp으로 처리하여 JPEG로 변환
+    await sharp(response.data)
+    .jpeg({ quality: 55 }) // JPEG로 변환 및 품질 설정 (원하는 품질로 조정 가능)
+    .toFile(imagePath);
+  
+    fs.writeFileSync(imagePath, response.data);
+    return imagePath;
+  });
+  return Promise.all(downloadPromises);
 }
 
 // 업로드 엔드포인트
@@ -230,7 +227,7 @@ app.post("/upload-image", upload2.single("image"), async (req, res) => {
   const promotionText = await createPromotionText(summarizedText); // 홍보 메시지 생성
   res.send({
     message: "파일 업로드 성공",
-    filePath: `/edit-images/${req.file.filename}.jpeg`,
+    filePath: `/edit-images/${req.file.filename}`,
     promotionText: promotionText, // 생성된 홍보 메시지 포함
   });
 });
@@ -239,44 +236,43 @@ app.post("/upload-image", upload2.single("image"), async (req, res) => {
 // 이미지 프롬프트 생성 및 URL 반환 함수
 async function generatePrompt(description) {
   try {
-    // GPT-4o를 사용하여 이미지 프롬프트 생성
     const gptResponse = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-4",
       messages: [
         {
           role: "system",
-          content: `You are an assistant that generates precise image prompts for a promotional poster background. 
-                    Ensure the image contains no text, letters, numbers, symbols, or words. 
-                    Focus solely on abstract, clean shapes, harmonious colors, and symbolic elements. 
-                    Avoid any elements that could be misinterpreted as text or numbers. 
-                    The design should be modern, minimalist, and visually appealing.`,
+          content: `You are an assistant that generates image prompts for a promotional painting background. 
+          Ensure the image does not contain any text, letters, numbers, symbols, or words. 
+          Focus solely on clean, abstract shapes, harmonious colors, gradients, and symbolic visual elements 
+          that convey the essence of the topic.
+          Examples of suitable themes include abstract art, serene landscapes, or conceptual designs. 
+          Keep the prompt concise and limited to 1000 characters.`
         },
         {
           role: "user",
-          content: `Generate a creative and visually appealing image prompt for a company’s promotional poster 
-                    background based on the following summary: ${description}`,
+          content: `Generate a creative and visually appealing image prompt for a company’s promotional painting  
+                    background based on the following summary, under 1000 characters: ${description}`,
         },
       ],
-      temperature: 0.3,
+      temperature: 0.5,
     });
 
     const imagePrompt = gptResponse.choices[0].message.content.trim();
-
-    // DALL-E 3를 사용하여 이미지 생성
     const dalleResponse = await openai.images.generate({
-      model: "dall-e-3",
       prompt: imagePrompt,
-      n: 1,
+      n: 4,
       size: "1024x1024",
-      quality: "hd",
-      style: "natural"
     });
 
-    console.log("Generated Image Prompt:", imagePrompt);
-    return dalleResponse.data.map((item) => item.url);
+    const imageUrls = dalleResponse.data.map((item) => item.url);
+    console.log('이미지 url 4개 :'+imageUrls);
+    return imageUrls;
   } catch (error) {
-    console.error("Error in generatePrompt:", error.response?.data || error.message);
-    throw error; // 호출자에게 오류 전달
+    console.error(
+      "Error generating image:",
+      error.response ? error.response.data : error.message
+    );
+    throw error;
   }
 }
 
