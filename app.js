@@ -174,7 +174,7 @@ app.post("/create", async (req, res) => {
     // 텍스트 생성 (포스터 내용)
     const textList = await createPosterText(text);
 
-    const serverUrl = "http://223.194.130.33:3030"; // 서버 IP와 포트를 설정하세요.
+    const serverUrl = "http://223.194.128.26:3030"; // 서버 IP와 포트를 설정하세요.
     const publicImagePaths = savedImagePaths.map((imagePath) =>
       `${serverUrl}/images/${path.basename(imagePath)}`
     );
@@ -241,21 +241,26 @@ async function generatePrompt(description) {
       messages: [
         {
           role: "system",
-          content: `You are an assistant that generates image prompts for a promotional painting background. 
-          Ensure the image does not contain any text, letters, numbers, symbols, or words. 
-          Focus solely on clean, abstract shapes, harmonious colors, gradients, and symbolic visual elements 
-          that convey the essence of the topic.
-          Examples of suitable themes include abstract art, serene landscapes, or conceptual designs. 
-          Keep the prompt concise and limited to 1000 characters.`
+          content: `
+          You are an assistant that creates image prompts for visually appealing and creative promotional painting backgrounds. 
+          Your responses must follow these strict rules:
+          1. Do NOT include text, letters, numbers, or symbols in the image description.
+          2. The prompt should be concise, focused, and no longer than 1000 characters.
+          3. Use abstract shapes, harmonious colors, gradients, and visual elements that convey the theme without relying on text.
+          Examples: "A serene gradient sunset over a conceptual abstract ocean, with smooth curves blending into soft pastel hues."
+          Avoid: "An image with words like 'Hello'."
+          `
         },
         {
           role: "user",
-          content: `Generate a creative and visually appealing image prompt for a company’s promotional painting  
-                    background based on the following summary, under 1000 characters: ${description}`,
+          content: `
+          Generate a creative and visually appealing image prompt for a company’s promotional painting background based on the following summary: ${description}.
+          `,
         },
       ],
       temperature: 0.5,
     });
+    
 
     const imagePrompt = gptResponse.choices[0].message.content.trim();
     const dalleResponse = await openai.images.generate({
@@ -303,10 +308,11 @@ async function getAccessToken() {
 
 async function sendMMS(accessToken, messageContent, sender, recipients, fileUrl, fileName) {
   // fileUrl을 로컬 파일 경로로 변환
-  const localFilePath = fileUrl.replace('http://223.194.130.33:3030', 'c:\\Users\\LDG\\Desktop\\프캡\\project');
+  const localFilePath = fileUrl.replace('http://223.194.128.26:3030', 'c:\\Users\\LDG\\Desktop\\프캡\\project');
+  console.log('c:\\Users\\LDG\\Desktop\\프캡\\project\\'+localFilePath);
 
   // 로컬 경로에서 파일 읽기
-  const image = fs.readFileSync(localFilePath);  // 실제 로컬 경로로 파일 읽기
+  const image = fs.readFileSync('c:\\Users\\LDG\\Desktop\\프캡\\project\\'+localFilePath);  // 실제 로컬 경로로 파일 읽기
   const base64Image = image.toString('base64');  // Base64로 변환
 
   const fileData = {
