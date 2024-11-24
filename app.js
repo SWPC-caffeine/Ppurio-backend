@@ -85,20 +85,20 @@ const summarizeText = async (text, userText) => {
           content: `
         당신은 마케팅 전문가입니다. 아래의 정보를 바탕으로 깔끔하고 현대적인 포스터 텍스트를 작성하세요. 각 항목은 머리글 기호(-)로 시작하며 한 줄씩 나누어 작성하세요.
 
-        **작성 규칙:**
+        작성 규칙:
           1. 불필요한 형식(예: 별모양, 특수기호 등)을 사용하지 마세요.
           2. 간결하고 직접적인 문구를 사용하세요.
           3. 각 정보는 한 줄로 요약하세요.
           4. 현대적이고 가독성 높은 톤을 유지하세요.
 
-        **포스터 구성 요소:**
+        포스터 구성 요소:
         - 헤드라인: 한 문장으로 핵심 메시지를 전달.
         - 핵심 정보: 행사 이름, 날짜/시간, 장소, 가격 정보.
         - 주요 혜택: 소비자가 관심을 가질 이유를 나열.
         - 행동 유도(Call-to-Action): 간단하고 명확한 행동 지침.
         - 문의 사항 및 링크: 이메일, 연락처, 등록 링크 등.
 
-        **입력된 정보:**  
+        입력된 정보:  
         ${text}
         `,
         },
@@ -121,7 +121,7 @@ const summarizeText = async (text, userText) => {
 const createPromotionText = async (summarizedText) => {
   const startTime = Date.now(); // 시작 시간 기록
   const response = await openai.chat.completions.create({
-    model: "gpt-3.5-turbo",
+    model: "gpt-4o-mini",
     messages: [
       {
         role: "user",
@@ -138,7 +138,7 @@ const createPromotionText = async (summarizedText) => {
 const createPosterText = async (summarizedText) => {
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-4o-mini",
       messages: [
         {
           role: "user",
@@ -236,22 +236,42 @@ async function downloadImages(urls) {
 
 // 업로드 엔드포인트
 app.post("/upload-image", upload2.single("image"), async (req, res) => {
-  console.log('upload-image url 호출');
+  console.log("upload-image url 호출");
+
   if (!req.file) {
     return res.status(400).send("파일이 업로드되지 않았습니다.");
   }
+
   const summarizedText = req.body.summarizedText;
+
   // summarizedText가 없으면 에러 처리
   if (!summarizedText) {
     return res.status(400).send("summarizedText가 필요합니다.");
   }
-  const promotionText = await createPromotionText(summarizedText); // 홍보 메시지 생성
-  res.send({
-    message: "파일 업로드 성공",
-    filePath: `/edit-images/${req.file.filename}.jpeg`,
-    promotionText: promotionText, // 생성된 홍보 메시지 포함
-  });
+
+  try {
+    const timestamp = Date.now();
+    const uniqueSuffix = Math.floor(Math.random() * 10000);
+    const outputFileName = `images/compressed_image_${timestamp}_${uniqueSuffix}.jpeg`;
+
+    // sharp로 이미지를 압축하고 저장
+    await sharp(req.file.buffer)
+      .jpeg({ quality: 35 }) // JPEG 품질 설정 (50%)
+      .toFile(outputFileName);
+
+    const promotionText = await createPromotionText(summarizedText); // 홍보 메시지 생성
+
+    res.send({
+      message: "파일 업로드 성공",
+      filePath: `/${outputFileName}`, // 압축된 파일 경로 반환
+      promotionText: promotionText, // 생성된 홍보 메시지 포함
+    });
+  } catch (error) {
+    console.error("이미지 처리 오류:", error);
+    res.status(500).send("이미지 처리 중 오류가 발생했습니다.");
+  }
 });
+
 
 // OpenAI 인스턴스 방식으로 이미지 프롬프트 생성 및 이미지 요청
 // 이미지 프롬프트 생성 및 URL 반환 함수
@@ -325,7 +345,7 @@ async function getAccessToken() {
 
 async function sendMMS(accessToken, messageContent, sender, recipients, fileUrl, fileName) {
   // fileUrl을 로컬 파일 경로로 변환
-  const localFilePath = fileUrl.replace('http://223.194.130.33:3030', 'c:\\Users\\LDG\\Desktop\\프캡\\project');
+  const localFilePath = fileUrl.replace('http://192.168.75.250:3030', 'c:\\Users\\LDG\\Desktop\\프캡\\project');
 
   // 로컬 경로에서 파일 읽기
   const image = fs.readFileSync(localFilePath);  // 실제 로컬 경로로 파일 읽기
