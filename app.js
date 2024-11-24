@@ -78,21 +78,41 @@ const summarizeText = async (text, userText) => {
   try {
     const startTime = Date.now(); // 시작 시간 기록
     const response = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: "gpt-4o-mini", // 사용 모델
       messages: [
         {
           role: "user",
-          content: `: ${userText} 그리고 반드시 머리글 기호로 짧게 작성해. 번호 매기지 말고 요약 내용만 바로 출력해\n\n${text}\n`,
+          content: `
+        당신은 마케팅 전문가입니다. 아래의 정보를 바탕으로 깔끔하고 현대적인 포스터 텍스트를 작성하세요. 각 항목은 머리글 기호(-)로 시작하며 한 줄씩 나누어 작성하세요.
+
+        **작성 규칙:**
+          1. 불필요한 형식(예: 별모양, 특수기호 등)을 사용하지 마세요.
+          2. 간결하고 직접적인 문구를 사용하세요.
+          3. 각 정보는 한 줄로 요약하세요.
+          4. 현대적이고 가독성 높은 톤을 유지하세요.
+
+        **포스터 구성 요소:**
+        - 헤드라인: 한 문장으로 핵심 메시지를 전달.
+        - 핵심 정보: 행사 이름, 날짜/시간, 장소, 가격 정보.
+        - 주요 혜택: 소비자가 관심을 가질 이유를 나열.
+        - 행동 유도(Call-to-Action): 간단하고 명확한 행동 지침.
+        - 문의 사항 및 링크: 이메일, 연락처, 등록 링크 등.
+
+        **입력된 정보:**  
+        ${text}
+        `,
         },
       ],
     });
-    const endTime = Date.now(); // 종료 시간 기록
-    console.log(`텍스트 요약 시간: ${endTime - startTime}ms`); // 실행 시간 출력
-    return response.choices[0].message.content; // 요약된 텍스트 반환
+
+    const endTime = Date.now();
+    console.log(`텍스트 요약 시간: ${endTime - startTime}ms`);
+
+    // 결과 반환
+    return response.choices[0].message.content.trim();
   } catch (error) {
-    console.error("텍스트 요약 중 에러 발생:", error.message); // 에러 메시지 출력
-    console.error("에러 세부정보:", error); // 자세한 에러 정보 출력
-    return "요약을 처리하는 동안 문제가 발생했습니다. 다시 시도해 주세요."; // 사용자에게 반환할 메시지
+    console.error("텍스트 요약 중 에러 발생:", error.message);
+    return "요약을 처리하는 동안 문제가 발생했습니다. 다시 시도해 주세요.";
   }
 };
 
@@ -116,20 +136,23 @@ const createPromotionText = async (summarizedText) => {
 
 // 홍보 포스터 문구 작성하는 함수
 const createPosterText = async (summarizedText) => {
-  const startTime = Date.now(); // 시작 시간 기록
-  const response = await openai.chat.completions.create({
-    model: "gpt-3.5-turbo",
-    messages: [
-      {
-        role: "user",
-        content: `포스터를 작성할 건데, 그 때 필요한 제목, 날짜, 장소가 있다면 포함해줘, 주요 내용 중에서도 핵심이 되는 내용만을 간단한 형태로 제공해줘 모든 내용은 '-' 로 구분해줘\n\n${summarizedText}\n`,
-      },
-    ],
-  });
-  const endTime = Date.now(); // 종료 시간 기록
-  console.log(`\n홍보 포스터 텍스트 생성 시간: ${endTime - startTime}ms`); // 실행 시간 출력
-  return response.choices[0].message.content; // 홍보 텍스트 반환
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "user",
+          content: `포스터를 작성할 건데, 그 때 필요한 제목, 날짜, 장소가 있다면 포함해줘, 주요 내용 중에서도 핵심이 되는 내용만을 간단한 형태로 제공해줘 모든 내용은 '-' 로 구분해줘\n\n${summarizedText}\n`,
+        },
+      ],
+    });
+    return response.choices[0].message.content;
+  } catch (error) {
+    console.error("Error in createPosterText:", error.message);
+    return "- 텍스트 생성 실패"; // 오류 발생 시 기본 텍스트 반환
+  }
 };
+
 
 // pdf 업로드를 처리하는 라우트
 app.post("/upload", upload.single("file"), async (req, res) => {
@@ -160,33 +183,30 @@ function removeNewlines(text) {
 // pdf 요약된걸 사용자가 수정하고 다음 눌렀을 때
 app.post("/create", async (req, res) => {
   try {
-    let text = req.body.text;
-    text = removeNewlines(text); // '\n' 제거
-    console.log("텍스트: " + text);
-    console.log("----------------------------------\n");
+    let text = req.body.text || '';
+    text = removeNewlines(text).trim(); // '\n' 제거 및 트림 처리
+    console.log("텍스트: ", text);
 
-    // 이미지 URL 생성
-    const imageUrls = await generatePrompt(text);
+    // Step 1: 이미지 URL 생성 및 텍스트 생성 (병렬 처리)
+    const [imageUrls, textList] = await Promise.all([
+      generatePrompt(text),  // 이미지 URL 생성
+      createPosterText(text) // 포스터 텍스트 생성
+    ]);
 
-    // 이미지 다운로드 및 저장
+    // Step 2: 이미지 다운로드
     const savedImagePaths = await downloadImages(imageUrls);
 
-    // 텍스트 생성 (포스터 내용)
-    const textList = await createPosterText(text);
-
-    const serverUrl = "http://223.194.128.26:3030"; // 서버 IP와 포트를 설정하세요.
+    // Step 3: 이미지 URL 생성
+    const serverUrl = "http://localhost:3030"; // 서버 IP와 포트
     const publicImagePaths = savedImagePaths.map((imagePath) =>
       `${serverUrl}/images/${path.basename(imagePath)}`
     );
 
-    // 저장된 이미지 경로를 ','로 연결
-    const joinedImagePaths = publicImagePaths.join(',');
-    console.log(joinedImagePaths);
-
+    // Step 4: 응답 반환
     res.json({
       success: true,
-      imageUrls: joinedImagePaths, // ','로 연결된 이미지 경로 반환
-      summary: textList, // 요약된 텍스트 반환
+      imageUrls: publicImagePaths.join(','), // ','로 연결된 이미지 경로 반환
+      summary: textList // 요약된 텍스트 반환
     });
   } catch (error) {
     console.error("포스터 생성 실패:", error.message);
@@ -197,20 +217,21 @@ app.post("/create", async (req, res) => {
 
 // 이미지 다운로드 및 저장 함수
 async function downloadImages(urls) {
-  const downloadPromises = urls.map(async (url) => {
-    const response = await axios.get(url, { responseType: "arraybuffer" });
-    const timestamp = Date.now();
-    const uniqueSuffix = Math.floor(Math.random() * 10000); // 랜덤 숫자 추가
-    const imagePath = `images/poster_image_${timestamp}_${uniqueSuffix}.jpeg`;
-    // 이미지 데이터를 Sharp으로 처리하여 JPEG로 변환
-    await sharp(response.data)
-    .jpeg({ quality: 55 }) // JPEG로 변환 및 품질 설정 (원하는 품질로 조정 가능)
-    .toFile(imagePath);
-  
-    fs.writeFileSync(imagePath, response.data);
-    return imagePath;
-  });
-  return Promise.all(downloadPromises);
+  return Promise.all(
+    urls.map(async (url) => {
+      const response = await axios.get(url, { responseType: "arraybuffer" });
+      const timestamp = Date.now();
+      const uniqueSuffix = Math.floor(Math.random() * 10000);
+      const imagePath = `images/poster_image_${timestamp}_${uniqueSuffix}.jpeg`;
+
+      // Sharp를 사용하여 이미지 저장
+      await sharp(response.data)
+        .jpeg({ quality: 50 })
+        .toFile(imagePath);
+
+      return imagePath;
+    })
+  );
 }
 
 // 업로드 엔드포인트
@@ -227,7 +248,7 @@ app.post("/upload-image", upload2.single("image"), async (req, res) => {
   const promotionText = await createPromotionText(summarizedText); // 홍보 메시지 생성
   res.send({
     message: "파일 업로드 성공",
-    filePath: `/edit-images/${req.file.filename}`,
+    filePath: `/edit-images/${req.file.filename}.jpeg`,
     promotionText: promotionText, // 생성된 홍보 메시지 포함
   });
 });
@@ -236,48 +257,44 @@ app.post("/upload-image", upload2.single("image"), async (req, res) => {
 // 이미지 프롬프트 생성 및 URL 반환 함수
 async function generatePrompt(description) {
   try {
+    // GPT-4o를 사용하여 이미지 프롬프트 생성
     const gptResponse = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-4o",
       messages: [
         {
           role: "system",
-          content: `
-          You are an assistant that creates image prompts for visually appealing and creative promotional painting backgrounds. 
-          Your responses must follow these strict rules:
-          1. Do NOT include text, letters, numbers, or symbols in the image description.
-          2. The prompt should be concise, focused, and no longer than 1000 characters.
-          3. Use abstract shapes, harmonious colors, gradients, and visual elements that convey the theme without relying on text.
-          Examples: "A serene gradient sunset over a conceptual abstract ocean, with smooth curves blending into soft pastel hues."
-          Avoid: "An image with words like 'Hello'."
-          `
+          content: `You are an assistant that generates precise image prompts for a promotional poster background. 
+                    Ensure the image contains no text, letters, numbers, symbols, or words. 
+                    Focus solely on abstract, clean shapes, harmonious colors, and symbolic elements. 
+                    Avoid any elements that could be misinterpreted as text or numbers. 
+                    The design should be modern, minimalist, and visually appealing.`,
         },
         {
           role: "user",
-          content: `
-          Generate a creative and visually appealing image prompt for a company’s promotional painting background based on the following summary: ${description}.
-          `,
+          content: `Generate a creative and visually appealing image prompt for a company’s promotional poster 
+                    background based on the following summary: ${description}`,
         },
       ],
-      temperature: 0.5,
+      temperature: 0.3,
     });
-    
 
     const imagePrompt = gptResponse.choices[0].message.content.trim();
+
+    // DALL-E 3를 사용하여 이미지 생성
     const dalleResponse = await openai.images.generate({
+      model: "dall-e-3",
       prompt: imagePrompt,
-      n: 4,
+      n: 1,
       size: "1024x1024",
+      quality: "hd",
+      style: "natural"
     });
 
-    const imageUrls = dalleResponse.data.map((item) => item.url);
-    console.log('이미지 url 4개 :'+imageUrls);
-    return imageUrls;
+    console.log("Generated Image Prompt:", imagePrompt);
+    return dalleResponse.data.map((item) => item.url);
   } catch (error) {
-    console.error(
-      "Error generating image:",
-      error.response ? error.response.data : error.message
-    );
-    throw error;
+    console.error("Error in generatePrompt:", error.response?.data || error.message);
+    throw error; // 호출자에게 오류 전달
   }
 }
 
@@ -308,11 +325,10 @@ async function getAccessToken() {
 
 async function sendMMS(accessToken, messageContent, sender, recipients, fileUrl, fileName) {
   // fileUrl을 로컬 파일 경로로 변환
-  const localFilePath = fileUrl.replace('http://223.194.128.26:3030', 'c:\\Users\\LDG\\Desktop\\프캡\\project');
-  console.log('c:\\Users\\LDG\\Desktop\\프캡\\project\\'+localFilePath);
+  const localFilePath = fileUrl.replace('http://223.194.130.33:3030', 'c:\\Users\\LDG\\Desktop\\프캡\\project');
 
   // 로컬 경로에서 파일 읽기
-  const image = fs.readFileSync('c:\\Users\\LDG\\Desktop\\프캡\\project\\'+localFilePath);  // 실제 로컬 경로로 파일 읽기
+  const image = fs.readFileSync(localFilePath);  // 실제 로컬 경로로 파일 읽기
   const base64Image = image.toString('base64');  // Base64로 변환
 
   const fileData = {
