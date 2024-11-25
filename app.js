@@ -1,4 +1,4 @@
-require("dotenv").config(); // dotenv 모듈 초기화
+require("dotenv").config(); 
 const axios = require("axios");
 const express = require("express");
 const multer = require("multer");
@@ -11,7 +11,6 @@ const bodyParser = require("body-parser");
 const app = express();
 const port = 3030;
 const sharp = require("sharp");
-const { createCanvas, loadImage, registerFont } = require("canvas"); // canvas 모듈
 
 app.use(cors()); // CORS 미들웨어를 사용하여 모든 도메인에 요청 허용
 app.use(express.json()); // JSON 파싱을 위한 미들웨어 설정
@@ -20,41 +19,41 @@ app.use("/edit-images", express.static(path.join(__dirname, "edit-images")));
 app.use(bodyParser.json({ limit: "10mb" })); // 이미지 크기에 맞게 limit 조정
 
 app.use(cors({
-  origin: "http://localhost:3000", // 클라이언트 도메인 설정
-  methods: ["GET", "POST"], // 허용할 HTTP 메서드
-  allowedHeaders: ["Content-Type", "Authorization"], // 허용할 헤더
+  origin: "http://localhost:3000", 
+  methods: ["GET", "POST"], 
+  allowedHeaders: ["Content-Type", "Authorization"],
 }));
 
 // OpenAI API 설정
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY, // 환경 변수에서 API 키 가져오기
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Multer 설정: 업로드된 파일을 'uploads' 폴더에 저장
+// pdf 파일 업로드 multer 설정
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, "uploads/"); // 저장할 폴더 경로
+    cb(null, "uploads/"); 
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, uniqueSuffix + path.extname(file.originalname)); // 파일 이름 설정
+    cb(null, uniqueSuffix + path.extname(file.originalname));
   },
 });
 
+// 이미지 생성 업로드 multer 설정
 const upload2 = multer({
   storage: multer.diskStorage({
     destination: (req, file, cb) => {
-      cb(null, "edit-images/"); // 파일 저장 경로
+      cb(null, "edit-images/"); 
     },
     filename: (req, file, cb) => {
-      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9); // 고유한 파일 이름 생성
-      cb(null, `${uniqueSuffix}.jpeg`); // 파일 이름에 .jpeg 확장자 추가
+      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      cb(null, `${uniqueSuffix}.jpeg`); 
     },
   }),
 });
 
 const upload = multer({ storage: storage });
-//const upload2 = multer({ dest: "edit-images/" }); // Multer 설정
 
 // PDF에서 텍스트를 추출하는 함수
 const extractTextFromPDF = (filePath) => {
@@ -68,7 +67,7 @@ const extractTextFromPDF = (filePath) => {
         resolve(data.text); // 추출된 텍스트 반환
       })
       .catch((err) => {
-        reject(err); // 오류 발생 시 reject
+        reject(err);
       });
   });
 };
@@ -78,7 +77,7 @@ const summarizeText = async (text, userText) => {
   try {
     const startTime = Date.now(); // 시작 시간 기록
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini", // 사용 모델
+      model: "gpt-4o-mini", 
       messages: [
         {
           role: "user",
@@ -107,11 +106,9 @@ const summarizeText = async (text, userText) => {
         },
       ],
     });
-
     const endTime = Date.now();
     console.log(`텍스트 요약 시간: ${endTime - startTime}ms`);
 
-    // 결과 반환
     return response.choices[0].message.content.trim();
   } catch (error) {
     console.error("텍스트 요약 중 에러 발생:", error.message);
@@ -119,8 +116,7 @@ const summarizeText = async (text, userText) => {
   }
 };
 
-
-// 홍보 텍스트 작성하는 함수 사용할 진 모름(mms 구현하면 사용)
+// 홍보 텍스트 작성하는 함수 (mms 구현하면 사용)
 const createPromotionText = async (summarizedText) => {
   const startTime = Date.now(); // 시작 시간 기록
   const response = await openai.chat.completions.create({
@@ -152,7 +148,7 @@ const createPosterText = async (summarizedText) => {
     return response.choices[0].message.content;
   } catch (error) {
     console.error("Error in createPosterText:", error.message);
-    return "- 텍스트 생성 실패"; // 오류 발생 시 기본 텍스트 반환
+    return "- 텍스트 생성 실패";
   }
 };
 
@@ -164,7 +160,7 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     const filePath = path.join(__dirname, "uploads", req.file.filename);
     console.log(userText);
     console.log(filePath);
-    const extractedText = await extractTextFromPDF(filePath);
+    const extractedText = await extractTextFromPDF(filePath);  // pdf에서 텍스트 추출
     const summarizedText = await summarizeText(extractedText, userText); // 텍스트 요약 (userText 포함)
     console.log("요약된 내용:" + summarizedText);
 
@@ -208,7 +204,7 @@ app.post("/create", async (req, res) => {
     // Step 4: 응답 반환
     res.json({
       success: true,
-      imageUrls: publicImagePaths.join(','), // ','로 연결된 이미지 경로 반환
+      imageUrls: publicImagePaths.join(','),
       summary: textList // 요약된 텍스트 반환
     });
   } catch (error) {
@@ -216,7 +212,6 @@ app.post("/create", async (req, res) => {
     res.status(500).send("포스터 생성 실패: " + error.message);
   }
 });
-
 
 // 이미지 다운로드 및 저장 함수
 async function downloadImages(urls) {
@@ -227,7 +222,6 @@ async function downloadImages(urls) {
       const uniqueSuffix = Math.floor(Math.random() * 10000);
       const imagePath = `images/poster_image_${timestamp}_${uniqueSuffix}.jpeg`;
 
-      // Sharp를 사용하여 이미지 저장
       await sharp(response.data)
         .jpeg({ quality: 50 })
         .toFile(imagePath);
@@ -237,40 +231,35 @@ async function downloadImages(urls) {
   );
 }
 
+// 포스터 업로드
 app.post("/upload-image", upload2.single("image"), async (req, res) => {
   console.log("upload-image url 호출");
 
   if (!req.file) {
     return res.status(400).send("파일이 업로드되지 않았습니다.");
   }
-
   const summarizedText = req.body.summarizedText;
-
-  // summarizedText가 없으면 에러 처리
   if (!summarizedText) {
     return res.status(400).send("summarizedText가 필요합니다.");
   }
 
   try {
-    // multer에서 저장한 파일 경로와 이름을 사용
-    const uploadedFileName = req.file.filename; // multer에서 생성된 파일 이름
+    const uploadedFileName = req.file.filename; 
     const outputDir = path.join(__dirname, 'edit-images');
-    const outputFileName = path.join(outputDir, uploadedFileName); // 실제 파일 경로
+    const outputFileName = path.join(outputDir, uploadedFileName); 
 
     console.log('최종파일: ' + outputFileName);
 
-    // sharp로 이미지를 압축하고 저장
-    const imageBuffer = await sharp(req.file.path) // multer에서 저장한 경로 사용
-      .jpeg({ quality: 100 }) // JPEG 품질 설정 (35%)
-      .toBuffer();  // 파일이 아닌 버퍼로 변환
+    const imageBuffer = await sharp(req.file.path)
+      .jpeg({ quality: 100 }) // JPEG 품질 설정 (100%)
+      .toBuffer();  
 
     fs.writeFileSync(outputFileName, imageBuffer);  // 변환된 버퍼를 파일로 저장
 
     const promotionText = await createPromotionText(summarizedText); // 홍보 메시지 생성
-
     res.send({
       message: "파일 업로드 성공",
-      filePath: `/edit-images/${uploadedFileName}`, // multer에서 생성된 파일 이름 반환
+      filePath: `/edit-images/${uploadedFileName}`,
       promotionText: promotionText, // 생성된 홍보 메시지 포함
     });
   } catch (error) {
@@ -279,14 +268,13 @@ app.post("/upload-image", upload2.single("image"), async (req, res) => {
   }
 });
 
-
 // OpenAI 인스턴스 방식으로 이미지 프롬프트 생성 및 이미지 요청
 // 이미지 프롬프트 생성 및 URL 반환 함수
 async function generatePrompt(description) {
   try {
     // GPT-4o를 사용하여 이미지 프롬프트 생성
     const gptResponse = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
@@ -321,7 +309,7 @@ async function generatePrompt(description) {
     return dalleResponse.data.map((item) => item.url);
   } catch (error) {
     console.error("Error in generatePrompt:", error.response?.data || error.message);
-    throw error; // 호출자에게 오류 전달
+    throw error;
   }
 }
 
@@ -362,13 +350,12 @@ async function sendMMS(accessToken, messageContent, sender, recipients, fileUrl,
   const base64Image = image.toString('base64');  // Base64로 변환
 
   const fileData = {
-    name: fileName,  // 파일 이름
-    size: image.length,  // 파일 크기 (byte 단위)
-    data: base64Image,  // Base64 인코딩된 이미지 데이터
+    name: fileName, 
+    size: image.length, 
+    data: base64Image, 
   };
 
   try {
-    // 수신자 정보를 targets 배열로 설정
     const targets = recipients.map((recipient) => ({
       to: recipient.to,  // 수신자 번호
       name: recipient.name || "",  // 수신자 이름 (선택적)
@@ -376,18 +363,18 @@ async function sendMMS(accessToken, messageContent, sender, recipients, fileUrl,
     }));
 
     const response = await axios.post(
-      `${API_URL}/v1/message`,  // 실제 API URL을 사용
+      `${API_URL}/v1/message`, 
       {
         account: USER_NAME,
-        messageType: 'MMS',  // MMS 지정
-        content: messageContent,  // 메시지 내용
-        from: sender,  // 발신번호
+        messageType: 'MMS', 
+        content: messageContent,  
+        from: sender,  
         duplicateFlag: 'N',
         rejectType: 'AD',
         refKey: 'ref_key',
-        targetCount: recipients.length,  // 수신자 수
-        targets: targets,  // 수신자 배열
-        files: [fileData],  // Base64로 인코딩된 이미지 데이터 포함
+        targetCount: recipients.length,  
+        targets: targets,  
+        files: [fileData], 
       },
       {
         headers: {
@@ -396,7 +383,6 @@ async function sendMMS(accessToken, messageContent, sender, recipients, fileUrl,
         },
       }
     );
-
     console.log('메시지 전송 성공');
     return response.data.messageKey;
   } catch (error) {
@@ -407,34 +393,27 @@ async function sendMMS(accessToken, messageContent, sender, recipients, fileUrl,
 
 app.post("/send-mms", async (req, res) => {
   const { messageContent, sender, recipients, fileUrl, fileName } = req.body;  // 메시지 내용, 발신자, 수신자, 파일 url ,파일 이름
-
   // 발신자 번호와 수신자 번호가 모두 있는지 확인
   if (!sender || !recipients || recipients.length === 0) {
     return res.status(400).json({ error: "Sender and recipients are required" });
   }
-
   // fileUrl과 fileName이 모두 있는지 확인
   if (!fileUrl || !fileName) {
     return res.status(400).json({ error: "fileUrl and fileName are required" });
   }
-
   // 액세스 토큰 발급
   const accessToken = await getAccessToken();
   if (!accessToken) {
     return res.status(500).json({ error: "Failed to get access token" });
   }
-
   // MMS 전송 함수 호출
   const messageKey = await sendMMS(accessToken, messageContent, sender, recipients, fileUrl, fileName);
   if (!messageKey) {
     return res.status(500).json({ error: "Failed to send MMS" });
   }
-
   res.json({ messageKey });
 });
 
-
-// 서버 실행
 app.listen(port, () => {
   console.log(`서버가 포트 ${port}에서 실행 중입니다.`);
 });
