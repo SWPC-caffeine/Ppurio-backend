@@ -98,6 +98,9 @@ const summarizeText = async (text, userText) => {
         - 행동 유도(Call-to-Action): 간단하고 명확한 행동 지침.
         - 문의 사항 및 링크: 이메일, 연락처, 등록 링크 등.
 
+        사용자 요구사항:
+        ${userText}
+
         입력된 정보:  
         ${text}
         `,
