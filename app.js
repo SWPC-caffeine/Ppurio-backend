@@ -197,7 +197,7 @@ app.post("/create", async (req, res) => {
     const savedImagePaths = await downloadImages(imageUrls);
 
     // Step 3: 이미지 URL 생성
-    const serverUrl = "http://localhost:3030"; // 서버 IP와 포트
+    const serverUrl = process.env.REACT_APP_SERVER_IP; // 서버 IP와 포트
     const publicImagePaths = savedImagePaths.map((imagePath) =>
       `${serverUrl}/images/${path.basename(imagePath)}`
     );
@@ -234,7 +234,6 @@ async function downloadImages(urls) {
   );
 }
 
-// 업로드 엔드포인트
 app.post("/upload-image", upload2.single("image"), async (req, res) => {
   console.log("upload-image url 호출");
 
@@ -250,20 +249,25 @@ app.post("/upload-image", upload2.single("image"), async (req, res) => {
   }
 
   try {
-    const timestamp = Date.now();
-    const uniqueSuffix = Math.floor(Math.random() * 10000);
-    const outputFileName = `images/compressed_image_${timestamp}_${uniqueSuffix}.jpeg`;
+    // multer에서 저장한 파일 경로와 이름을 사용
+    const uploadedFileName = req.file.filename; // multer에서 생성된 파일 이름
+    const outputDir = path.join(__dirname, 'edit-images');
+    const outputFileName = path.join(outputDir, uploadedFileName); // 실제 파일 경로
+
+    console.log('최종파일: ' + outputFileName);
 
     // sharp로 이미지를 압축하고 저장
-    await sharp(req.file.buffer)
-      .jpeg({ quality: 35 }) // JPEG 품질 설정 (50%)
-      .toFile(outputFileName);
+    const imageBuffer = await sharp(req.file.path) // multer에서 저장한 경로 사용
+      .jpeg({ quality: 35 }) // JPEG 품질 설정 (35%)
+      .toBuffer();  // 파일이 아닌 버퍼로 변환
+
+    fs.writeFileSync(outputFileName, imageBuffer);  // 변환된 버퍼를 파일로 저장
 
     const promotionText = await createPromotionText(summarizedText); // 홍보 메시지 생성
 
     res.send({
       message: "파일 업로드 성공",
-      filePath: `/${outputFileName}`, // 압축된 파일 경로 반환
+      filePath: `/edit-images/${uploadedFileName}`, // multer에서 생성된 파일 이름 반환
       promotionText: promotionText, // 생성된 홍보 메시지 포함
     });
   } catch (error) {
@@ -344,8 +348,11 @@ async function getAccessToken() {
 }
 
 async function sendMMS(accessToken, messageContent, sender, recipients, fileUrl, fileName) {
-  // fileUrl을 로컬 파일 경로로 변환
-  const localFilePath = fileUrl.replace('http://192.168.75.250:3030', 'c:\\Users\\LDG\\Desktop\\프캡\\project');
+  const serverIp = process.env.REACT_APP_SERVER_IP;
+  if (!serverIp) {
+    throw new Error('Server IP is not defined in the .env file.');
+  }
+  const localFilePath = path.resolve(__dirname, 'c:\\Users\\LDG\\Desktop\\프캡\\project\\edit-images', fileName);
 
   // 로컬 경로에서 파일 읽기
   const image = fs.readFileSync(localFilePath);  // 실제 로컬 경로로 파일 읽기
