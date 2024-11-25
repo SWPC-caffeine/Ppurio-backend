@@ -258,7 +258,7 @@ app.post("/upload-image", upload2.single("image"), async (req, res) => {
 
     // sharp로 이미지를 압축하고 저장
     const imageBuffer = await sharp(req.file.path) // multer에서 저장한 경로 사용
-      .jpeg({ quality: 35 }) // JPEG 품질 설정 (35%)
+      .jpeg({ quality: 45 }) // JPEG 품질 설정 (35%)
       .toBuffer();  // 파일이 아닌 버퍼로 변환
 
     fs.writeFileSync(outputFileName, imageBuffer);  // 변환된 버퍼를 파일로 저장
