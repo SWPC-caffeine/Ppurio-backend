@@ -91,10 +91,9 @@ const summarizeText = async (text, userText) => {
           4. 현대적이고 가독성 높은 톤을 유지하세요.
 
         포스터 구성 요소:
-        - 헤드라인: 한 문장으로 핵심 메시지를 전달.
+        - 제목: 한 문장으로 핵심 메시지를 전달.
         - 핵심 정보: 행사 이름, 날짜/시간, 장소, 가격 정보.
         - 주요 혜택: 소비자가 관심을 가질 이유를 나열.
-        - 행동 유도(Call-to-Action): 간단하고 명확한 행동 지침.
         - 문의 사항 및 링크: 이메일, 연락처, 등록 링크 등.
 
         사용자 요구사항:
@@ -274,23 +273,21 @@ async function generatePrompt(description) {
   try {
     // GPT-4o를 사용하여 이미지 프롬프트 생성
     const gptResponse = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "o1-preview",
       messages: [
         {
-          role: "system",
-          content: `You are an assistant that generates precise image prompts for a promotional poster background. 
-                    Ensure the image contains no text, letters, numbers, symbols, or words. 
-                    Focus solely on abstract, clean shapes, harmonious colors, and symbolic elements. 
-                    Avoid any elements that could be misinterpreted as text or numbers. 
-                    The design should be modern, minimalist, and visually appealing.`,
-        },
-        {
           role: "user",
-          content: `Generate a creative and visually appealing image prompt for a company’s promotional poster 
+          content: `
+          You are an assistant that generates precise image prompts for a promotional poster background. 
+          Ensure the image contains no text, letters, numbers, symbols, or words. 
+          Focus solely on abstract, clean shapes, harmonious colors, and symbolic elements. 
+          Avoid any elements that could be misinterpreted as text or numbers. 
+          The design should be modern, minimalist, and visually appealing.
+
+          Generate a creative and visually appealing image prompt for a company’s promotional poster 
                     background based on the following summary: ${description}`,
         },
       ],
-      temperature: 0.3,
     });
 
     const imagePrompt = gptResponse.choices[0].message.content.trim();
